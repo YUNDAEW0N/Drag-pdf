@@ -98,12 +98,13 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
   //서버 전송 메서드 추가
   /*-------------------------------------------------------------------------------- */
   Future<void> uploadFileToServer(File file) async {
-    final uri = Uri.parse('https://localhost:80/upload'); // 서버 엔드포인트로 변경해야함
+    final uri = Uri.parse('http://112.212.1.197:80/upload');
 
     try {
+      print('파일 전송 시작');
       final request = http.MultipartRequest('POST', uri)
         ..files.add(http.MultipartFile(
-          'file', // 필드명 (서버와 맞춰야 함)
+          'uploadFile', // 필드명 (서버와 맞춰야 함)
           file.readAsBytes().asStream(), // 바이트 배열을 Stream으로 변환
           await file.length(),
           filename: file.path.split('/').last,
@@ -111,6 +112,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
 
       final response = await request.send();
 
+      print('서버 응답 상태 코드: ${response.statusCode}');
       if (response.statusCode == 200) {
         print('업로드 성공');
       } else {
@@ -131,6 +133,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
         setState(() {
           Utils.printInDebug("Document Scanned: $filename");
         });
+        print('서버 전송 시도.');
         await uploadFileToServer(file); // 서버 전송 시도
       }
     } catch (error) {

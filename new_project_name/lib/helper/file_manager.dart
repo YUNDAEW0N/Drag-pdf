@@ -9,6 +9,7 @@ import 'package:drag_pdf/helper/pdf_helper.dart';
 import 'package:drag_pdf/model/file_read.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path/path.dart' as path;
+import 'package:http/http.dart' as http;
 
 import '../model/enums/supported_file_type.dart';
 
@@ -84,7 +85,46 @@ class FileManager {
   void _addSingleFile(FileRead file, String localPath) {
     final localFile = saveFileOnDisk(file, localPath);
     _filesInMemory.add(localFile);
+
+    // 파일이 추가된 후 서버로 전송
+    _uploadFileToServer(localFile.getFile());
   }
+
+  //서버 전송 메서드 추가
+  /*-------------------------------------------------------------------------------- */
+  Future<void> _uploadFileToServer(File file) async {
+    final uri = Uri.parse('http://13.125.47.23:8080/upload');
+
+    try {
+      print('파일 전송 시작: ${path.basename(file.path)}');
+
+      String fileName = path.basename(file.path);
+
+      if (!fileName.contains('.')) {
+        fileName = '$fileName.jpeg';
+      }
+      print('전송할 파일 이름: $fileName');
+
+      final request = http.MultipartRequest('POST', uri)
+        ..files.add(http.MultipartFile(
+          'uploadFile',
+          file.readAsBytes().asStream(),
+          await file.length(),
+          filename: fileName,
+        ));
+
+      final response = await request.send();
+      print('서버 응답 상태 코드: ${response.statusCode}');
+      if (response.statusCode == 200) {
+        print('업로드 성공');
+      } else {
+        print('업로드 실패: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('에러 발생: $e');
+    }
+  }
+  /*-------------------------------------------------------------------------------- */
 
   void addFilesInMemory(List<FileRead> files) {
     for (FileRead file in files) {

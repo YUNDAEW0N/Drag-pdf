@@ -8,6 +8,7 @@ import 'package:drag_pdf/helper/file_helper.dart';
 import 'package:drag_pdf/helper/pdf_helper.dart';
 import 'package:drag_pdf/model/file_read.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:path/path.dart' as path;
 
 import '../model/enums/supported_file_type.dart';
 
@@ -113,29 +114,56 @@ class FileManager {
     return names;
   }
 
+  // Future<FileRead?> scanDocument() async {
+  //   FileRead? fileRead;
+  //   List<String>? paths = await CunningDocumentScanner.getPictures();
+  //   if (paths != null && paths.isNotEmpty) {
+  //     final pdf = pw.Document();
+  //     File file;
+  //     for (String path in paths) {
+  //       final image = pw.MemoryImage(
+  //         File(path).readAsBytesSync(),
+  //       );
+
+  //       pdf.addPage(pw.Page(build: (pw.Context context) {
+  //         return pw.Center(
+  //           child: pw.Image(image),
+  //         );
+  //       }));
+  //     }
+  //     file = File('${fileHelper.localPath}${_nameOfNextFile()}');
+  //     await file.writeAsBytes(await pdf.save());
+
+  //     final size = await file.length();
+  //     fileRead = FileRead(file, _nameOfNextFile(), null, size, "pdf");
+  //     _addSingleFile(fileRead, fileHelper.localPath);
+  //   }
+  //   return fileRead;
+  // }
+
   Future<FileRead?> scanDocument() async {
     FileRead? fileRead;
     List<String>? paths = await CunningDocumentScanner.getPictures();
     if (paths != null && paths.isNotEmpty) {
-      final pdf = pw.Document();
-      File file;
-      for (String path in paths) {
-        final image = pw.MemoryImage(
-          File(path).readAsBytesSync(),
-        );
+      for (String imagePath in paths) {
+        // 이미지를 JPG 파일로 저장
+        final directory = Directory(fileHelper.localPath);
+        final fileName = _nameOfNextFile(value: 1);
+        final savePath = path.join(directory.path, '$fileName.jpg');
+        final imageFile = File(savePath);
 
-        pdf.addPage(pw.Page(build: (pw.Context context) {
-          return pw.Center(
-            child: pw.Image(image),
-          );
-        }));
+        // 원본 이미지를 로드하여 JPG로 저장
+        final image = decodeImage(File(imagePath).readAsBytesSync());
+        if (image != null) {
+          imageFile.writeAsBytesSync(encodeJpg(image, quality: 85));
+
+          final size = await imageFile.length();
+          fileRead = FileRead(imageFile, fileName, image, size, "jpg");
+          _addSingleFile(fileRead, fileHelper.localPath);
+        } else {
+          print('이미지 로드 실패: $imagePath');
+        }
       }
-      file = File('${fileHelper.localPath}${_nameOfNextFile()}');
-      await file.writeAsBytes(await pdf.save());
-
-      final size = await file.length();
-      fileRead = FileRead(file, _nameOfNextFile(), null, size, "pdf");
-      _addSingleFile(fileRead, fileHelper.localPath);
     }
     return fileRead;
   }
@@ -146,15 +174,15 @@ class FileManager {
     for (FileRead file in _filesInMemory) {
       final FileRead? intermediate = switch (file.getExtensionType()) {
         SupportedFileType.pdf => await PDFHelper.createPdfFromOtherPdf(
-              file, '${file.getFile().path}.pdf', '${file.getName()}.pdf'),
+            file, '${file.getFile().path}.pdf', '${file.getName()}.pdf'),
         SupportedFileType.png => await PDFHelper.createPdfFromImage(
-              file, '${file.getFile().path}.pdf', '${file.getName()}.pdf'),
+            file, '${file.getFile().path}.pdf', '${file.getName()}.pdf'),
         SupportedFileType.jpg => await PDFHelper.createPdfFromImage(
-              file, '${file.getFile().path}.pdf', '${file.getName()}.pdf'),
+            file, '${file.getFile().path}.pdf', '${file.getName()}.pdf'),
         SupportedFileType.jpeg => await PDFHelper.createPdfFromImage(
-              file, '${file.getFile().path}.pdf', '${file.getName()}.pdf'),
+            file, '${file.getFile().path}.pdf', '${file.getName()}.pdf'),
       };
-    intermediateFiles.add(intermediate!.getFile().path);
+      intermediateFiles.add(intermediate!.getFile().path);
     }
     FileRead fileRead = await PDFHelper.mergePdfDocuments(
         intermediateFiles, outputPath, nameOutputFile);

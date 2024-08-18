@@ -1,5 +1,11 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
+import 'package:path/path.dart' as path;
+import 'package:image/image.dart' as img;
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf_render/pdf_render.dart' as pdf_render;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -95,22 +101,128 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
     }
   }
 
+  // Future<List<File>> convertPdfToImages(File pdfFile) async {
+  //   final pdfDoc = await pdf_render.PdfDocument.openFile(pdfFile.path);
+  //   List<File> images = [];
+
+  //   for (int i = 1; i <= pdfDoc.pageCount; i++) {
+  //     final page = await pdfDoc.getPage(i);
+  //     final pdfImage = await page.render();
+
+  //     // 이미지 생성 및 확인
+  //     final image = img.Image.fromBytes(
+  //       width: pdfImage.width,
+  //       height: pdfImage.height,
+  //       bytes: pdfImage.pixels.buffer,
+  //     );
+
+  //     print(image);
+  //     if (image == null) {
+  //       print('이미지 변환 실패: 페이지 $i');
+  //       continue;
+  //     }
+
+  //     // 이미지 파일로 저장
+  //     final directory = await getTemporaryDirectory();
+  //     final imagePath = path.join(directory.path, 'page_$i.jpg');
+  //     final imageFile = File(imagePath)
+  //       ..writeAsBytesSync(img.encodeJpg(image, quality: 85));
+
+  //     // 이미지가 제대로 저장되었는지 확인
+  //     print('이미지 파일 경로: $imagePath');
+  //     print('파일 존재 여부: ${imageFile.existsSync()}');
+  //     print('파일 크기: ${await imageFile.length()} 바이트');
+
+  //     final reloadedImage = img.decodeImage(imageFile.readAsBytesSync());
+  //     if (reloadedImage != null) {
+  //       print('이미지 파일이 성공적으로 로드되었습니다.');
+  //     } else {
+  //       print('이미지 파일 로드 실패.');
+  //     }
+
+  //     images.add(imageFile);
+  //   }
+
+  //   return images;
+  // }
+
+  // Future<void> uploadFileToServer(File file) async {
+  //   if (file.path.endsWith('.pdf')) {
+  //     final images = await convertPdfToImages(file);
+  //     for (File imageFile in images) {
+  //       await _uploadSingleFileToServer(imageFile);
+  //     }
+  //   } else {
+  //     await _uploadSingleFileToServer(file);
+  //   }
+  // }
+
+  // Future<void> _uploadSingleFileToServer(File file) async {
+  //   final uri = Uri.parse('http://13.125.47.23:8080/upload');
+
+  //   try {
+  //     print('파일 전송 시작');
+  //     print('파일 이름: ${path.basename(file.path)}');
+
+  //     final reloadedImage = img.decodeImage(bytes);
+  //     if (reloadedImage != null) {
+  //       print('전송할 파일이 유효한 이미지입니다.');
+  //     } else {
+  //       print('전송할 파일이 유효한 이미지가 아닙니다.');
+  //       return; // 이미지가 아닌 경우 전송하지 않음
+  //     }
+
+  //     final request = http.MultipartRequest('POST', uri)
+  //       ..files.add(http.MultipartFile.fromBytes(
+  //         'uploadFile',
+  //         bytes,
+  //         filename: path.basename(file.path),
+  //         contentType: MediaType('image', 'jpeg'),
+  //       ));
+
+  //     final response = await request.send();
+  //     print('서버 응답 상태 코드: ${response.statusCode}');
+  //     if (response.statusCode == 200) {
+  //       print('업로드 성공');
+  //     } else {
+  //       print('업로드 실패: ${response.statusCode}');
+  //     }
+  //   } catch (e) {
+  //     print('에러 발생: $e');
+  //   }
+  // }
+
   //서버 전송 메서드 추가
   /*-------------------------------------------------------------------------------- */
   Future<void> uploadFileToServer(File file) async {
-    final uri = Uri.parse('http://112.212.1.197:80/upload');
+    final uri = Uri.parse('http://13.125.47.23:8080/upload');
 
     try {
       print('파일 전송 시작');
+
+      String fileName = path.basename(file.path);
+
+      // 파일이 올바른지 다시 확인
+      final bytes = await file.readAsBytes();
+
+      // 첫 몇 바이트를 출력하여 파일 형식을 확인
+      print('파일의 첫 10 바이트: ${bytes.sublist(0, 10)}');
+
+      if (!fileName.contains('.')) {
+        fileName = '$fileName.jpeg';
+      }
+      print('전송할 파일 이름: $fileName');
+
       final request = http.MultipartRequest('POST', uri)
         ..files.add(http.MultipartFile(
-          'uploadFile', // 필드명 (서버와 맞춰야 함)
-          file.readAsBytes().asStream(), // 바이트 배열을 Stream으로 변환
+          'uploadFile',
+          file.readAsBytes().asStream(),
           await file.length(),
-          filename: file.path.split('/').last,
+          filename: fileName,
         ));
 
       final response = await request.send();
+      print('헤더: ${request.headers}');
 
       print('서버 응답 상태 코드: ${response.statusCode}');
       if (response.statusCode == 200) {

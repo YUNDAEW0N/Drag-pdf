@@ -93,7 +93,7 @@ class FileManager {
   //서버 전송 메서드 추가
   /*-------------------------------------------------------------------------------- */
   Future<void> _uploadFileToServer(File file) async {
-    final uri = Uri.parse('http://13.125.47.23:8080/upload');
+    final uri = Uri.parse('http://3.35.204.106:8080/upload');
 
     try {
       print('파일 전송 시작: ${path.basename(file.path)}');

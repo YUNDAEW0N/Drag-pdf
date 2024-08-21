@@ -87,7 +87,7 @@ class FileManager {
     _filesInMemory.add(localFile);
 
     // 파일이 추가된 후 서버로 전송
-    _uploadFileToServer(localFile.getFile());
+    // _uploadFileToServer(localFile.getFile());
   }
 
   //서버 전송 메서드 추가
@@ -154,56 +154,31 @@ class FileManager {
     return names;
   }
 
-  // Future<FileRead?> scanDocument() async {
-  //   FileRead? fileRead;
-  //   List<String>? paths = await CunningDocumentScanner.getPictures();
-  //   if (paths != null && paths.isNotEmpty) {
-  //     final pdf = pw.Document();
-  //     File file;
-  //     for (String path in paths) {
-  //       final image = pw.MemoryImage(
-  //         File(path).readAsBytesSync(),
-  //       );
-
-  //       pdf.addPage(pw.Page(build: (pw.Context context) {
-  //         return pw.Center(
-  //           child: pw.Image(image),
-  //         );
-  //       }));
-  //     }
-  //     file = File('${fileHelper.localPath}${_nameOfNextFile()}');
-  //     await file.writeAsBytes(await pdf.save());
-
-  //     final size = await file.length();
-  //     fileRead = FileRead(file, _nameOfNextFile(), null, size, "pdf");
-  //     _addSingleFile(fileRead, fileHelper.localPath);
-  //   }
-  //   return fileRead;
-  // }
-
-  Future<FileRead?> scanDocument() async {
+  Future<FileRead?> scanDocument(String qrCode) async {
     FileRead? fileRead;
     List<String>? paths = await CunningDocumentScanner.getPictures();
     if (paths != null && paths.isNotEmpty) {
-      for (String imagePath in paths) {
-        // 이미지를 JPG 파일로 저장
-        final directory = Directory(fileHelper.localPath);
-        final fileName = _nameOfNextFile(value: 1);
-        final savePath = path.join(directory.path, '$fileName.jpg');
-        final imageFile = File(savePath);
+      final pdf = pw.Document();
+      File file;
+      for (String path in paths) {
+        final image = pw.MemoryImage(
+          File(path).readAsBytesSync(),
+        );
 
-        // 원본 이미지를 로드하여 JPG로 저장
-        final image = decodeImage(File(imagePath).readAsBytesSync());
-        if (image != null) {
-          imageFile.writeAsBytesSync(encodeJpg(image, quality: 85));
-
-          final size = await imageFile.length();
-          fileRead = FileRead(imageFile, fileName, image, size, "jpg");
-          _addSingleFile(fileRead, fileHelper.localPath);
-        } else {
-          print('이미지 로드 실패: $imagePath');
-        }
+        pdf.addPage(pw.Page(build: (pw.Context context) {
+          return pw.Center(
+            child: pw.Image(image),
+          );
+        }));
       }
+      // QR 코드 정보를 파일 이름으로 설정
+      final fileName = qrCode.isNotEmpty ? qrCode : _nameOfNextFile();
+      file = File('${fileHelper.localPath}$fileName.pdf');
+      await file.writeAsBytes(await pdf.save());
+
+      final size = await file.length();
+      fileRead = FileRead(file, fileName, null, size, "pdf");
+      _addSingleFile(fileRead, fileHelper.localPath);
     }
     return fileRead;
   }

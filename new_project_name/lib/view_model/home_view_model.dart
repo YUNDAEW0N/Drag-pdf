@@ -4,6 +4,7 @@ import 'package:drag_pdf/model/enums/supported_file_type.dart';
 import 'package:drag_pdf/model/file_read.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 
 class HomeViewModel {
   final FileManager _mfl = AppSession.singleton.mfl;
@@ -76,8 +77,8 @@ class HomeViewModel {
     await _mfl.renameFile(file, newName);
   }
 
-  Future<FileRead?> scanDocument() async {
-    return await _mfl.scanDocument();
+  Future<FileRead?> scanDocument(String qrCode) async {
+    return await _mfl.scanDocument(qrCode);
   }
 
   Future<FileRead> generatePreviewPdfDocument() async {

@@ -8,6 +8,8 @@ import 'package:image/image.dart' as img;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf_render/pdf_render.dart' as pdf_render;
 
+import 'package:qr_code_scanner/qr_code_scanner.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:drag_pdf/common/colors/colors_app.dart';
@@ -31,8 +33,10 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
     with WidgetsBindingObserver {
   final HomeViewModel viewModel = HomeViewModel();
 
-  // 스캔된 파일을 저장할 리스트
-  List<FileRead> filesToUpload = [];
+  // QR 스캔 관련 변수 추가
+  final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
+  QRViewController? qrController;
+  String scannedTitle = '';
 
   @override
   void initState() {
@@ -42,6 +46,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
 
   @override
   void dispose() {
+    qrController?.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -82,8 +87,10 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
       switch (from) {
         case LoaderOf.imagesFromGallery:
           await viewModel.loadImagesFromStorage();
+          break; // 각 case 문 끝에 break 추가
         case LoaderOf.filesFromFileSystem:
           await viewModel.loadFilesFromStorage();
+          break;
       }
     } catch (error) {
       final subtitle =
@@ -105,143 +112,179 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
     }
   }
 
-  //서버 전송 메서드 추가
-  /*-------------------------------------------------------------------------------- */
-  // Future<void> uploadFileToServer(File file) async {
-  //   final uri = Uri.parse('http://13.125.47.23:8080/upload');
+  // QR 코드 스캔을 처리하는 메서드 추가
+  Future<void> _showQRView(BuildContext context) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(
+            title: Text('SCAN QR CODE'),
+          ),
+          body: Stack(
+            children: [
+              QRView(
+                key: qrKey,
+                onQRViewCreated: _onQRViewCreated,
+              ),
+              // QR 코드 스캔을 위한 모서리 가이드라인 추가
+              Center(
+                child: Container(
+                  width: 250, // 가이드라인의 너비
+                  height: 250, // 가이드라인의 높이
+                  child: Stack(
+                    children: [
+                      // 좌상단 모서리
+                      Align(
+                        alignment: Alignment.topLeft,
+                        child: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: Colors.white, width: 4),
+                              left: BorderSide(color: Colors.white, width: 4),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 우상단 모서리
+                      Align(
+                        alignment: Alignment.topRight,
+                        child: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              top: BorderSide(color: Colors.white, width: 4),
+                              right: BorderSide(color: Colors.white, width: 4),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 좌하단 모서리
+                      Align(
+                        alignment: Alignment.bottomLeft,
+                        child: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: Colors.white, width: 4),
+                              left: BorderSide(color: Colors.white, width: 4),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // 우하단 모서리
+                      Align(
+                        alignment: Alignment.bottomRight,
+                        child: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: const BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: Colors.white, width: 4),
+                              right: BorderSide(color: Colors.white, width: 4),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
-  //   try {
-  //     print('파일 전송 시작');
+  void _onQRViewCreated(QRViewController controller) {
+    this.qrController = controller;
 
-  //     String fileName = path.basename(file.path);
+    String? lastScannedCode;
+    int scanCount = 0;
+    const int requiredScans = 3; // 동일한 코드가 3번 인식되면 유효한 것으로 간주
 
-  //     // 파일이 올바른지 다시 확인
-  //     final bytes = await file.readAsBytes();
+    controller.scannedDataStream.listen((scanData) async {
+      if (scanData.code != null && scanData.code != lastScannedCode) {
+        lastScannedCode = scanData.code;
+        scanCount = 1;
+      } else if (scanData.code == lastScannedCode) {
+        scanCount++;
+      }
 
-  //     // 첫 몇 바이트를 출력하여 파일 형식을 확인
-  //     print('파일의 첫 10 바이트: ${bytes.sublist(0, 10)}');
+      if (scanCount >= requiredScans) {
+        setState(() {
+          scannedTitle = scanData.code ?? "Unknown"; // QR 코드 스캔 결과 저장
+        });
 
-  //     if (!fileName.contains('.')) {
-  //       fileName = '$fileName.jpeg';
-  //     }
-  //     print('전송할 파일 이름: $fileName');
+        // QR 코드 텍스트를 확대하여 사용자에게 보여줌
+        await _showScannedQRCodeText(scanData.code ?? "Unknown");
 
-  //     final request = http.MultipartRequest('POST', uri)
-  //       ..files.add(http.MultipartFile(
-  //         'uploadFile',
-  //         file.readAsBytes().asStream(),
-  //         await file.length(),
-  //         filename: fileName,
-  //       ));
+        controller.stopCamera(); // 스캔이 완료되면 카메라 멈춤
+        Navigator.of(context).pop(); // 스캔 화면 닫기
+      }
+    });
+  }
 
-  //     final response = await request.send();
-  //     print('헤더: ${request.headers}');
-
-  //     print('서버 응답 상태 코드: ${response.statusCode}');
-  //     if (response.statusCode == 200) {
-  //       print('업로드 성공');
-  //     } else {
-  //       print('업로드 실패: ${response.statusCode}');
-  //     }
-  //   } catch (e) {
-  //     print('에러 발생: $e');
-  //   }
-  // }
+// QR 코드 텍스트를 확대하여 보여주는 메서드
+  Future<void> _showScannedQRCodeText(String code) async {
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text("QR Code Scanned"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                code,
+                style: TextStyle(fontSize: 24), // QR 코드 텍스트를 크게 표시
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: Text("OK"),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   Future<void> scanImages() async {
     try {
-      context.pop('Scan');
-      final fileread = await viewModel.scanDocument();
-      if (fileread != null) {
-        final file = fileread.getFile();
-        final filename = fileread.getName();
-        setState(() {
-          Utils.printInDebug("Document Scanned: $filename");
-        });
+      // QR/바코드 스캔을 먼저 수행
+      await _showQRView(context);
+
+      // 이후 스캔 결과를 사용하여 문서 스캔
+      if (scannedTitle.isNotEmpty) {
+        final fileread =
+            await viewModel.scanDocument(scannedTitle); // QR 코드 정보 전달
+        if (fileread != null) {
+          setState(() {
+            Utils.printInDebug("Document Scanned: ${fileread.getName()}");
+          });
+        }
       }
     } catch (error) {
       if (!mounted) return; // check "mounted" property
       CustomDialog.showError(
-          context: context,
-          error: error,
-          titleLocalized: 'read_file_error_title',
-          subtitleLocalized: 'scan_file_error_subtitle',
-          buttonTextLocalized: 'accept');
+        context: context,
+        error: error,
+        titleLocalized: 'read_file_error_title',
+        subtitleLocalized: 'scan_file_error_subtitle',
+        buttonTextLocalized: 'accept',
+      );
     }
   }
-
-  // Future<void> scanImages() async {
-  //   try {
-  //     context.pop('Scan');
-
-  //     // 스캔한 파일을 추가하고 UI 업데이트
-  //     final fileread = await viewModel.scanDocument();
-  //     if (fileread != null) {
-  //       setState(() {
-  //         filesToUpload.add(fileread);
-  //       });
-  //       print('파일 스캔 완료: ${fileread.getName()}');
-  //     }
-
-  //     // 전송할 파일 리스트를 복사하여 사용
-  //     List<FileRead> filesToUploadCopy = List.from(filesToUpload);
-
-  //     // 파일이 추가될 때마다 서버에 전송
-  //     for (var fileRead in filesToUploadCopy) {
-  //       final file = fileRead.getFile();
-  //       print('서버 전송 시도: ${fileRead.getName()}');
-  //       await uploadFileToServer(file);
-  //     }
-
-  //     // 전송이 완료된 후 업로드 리스트를 비움
-  //     setState(() {
-  //       filesToUpload.clear(); // UI 업데이트를 위해 setState 사용
-  //       print('업로드 리스트가 비워졌습니다.');
-  //     });
-  //   } catch (error) {
-  //     if (!mounted) return; // check "mounted" property
-  //     CustomDialog.showError(
-  //       context: context,
-  //       error: error,
-  //       titleLocalized: 'read_file_error_title',
-  //       subtitleLocalized: 'scan_file_error_subtitle',
-  //       buttonTextLocalized: 'accept',
-  //     );
-  //   }
-  // }
-
-  // Future<void> uploadFileToServer(File file) async {
-  //   final uri = Uri.parse('http://13.125.47.23:8080/upload');
-
-  //   try {
-  //     print('파일 전송 시작: ${path.basename(file.path)}');
-
-  //     String fileName = path.basename(file.path);
-
-  //     if (!fileName.contains('.')) {
-  //       fileName = '$fileName.jpeg';
-  //     }
-  //     print('전송할 파일 이름: $fileName');
-
-  //     final request = http.MultipartRequest('POST', uri)
-  //       ..files.add(http.MultipartFile(
-  //         'uploadFile',
-  //         file.readAsBytes().asStream(),
-  //         await file.length(),
-  //         filename: fileName,
-  //       ));
-
-  //     final response = await request.send();
-  //     print('서버 응답 상태 코드: ${response.statusCode}');
-  //     if (response.statusCode == 200) {
-  //       print('업로드 성공');
-  //     } else {
-  //       print('업로드 실패: ${response.statusCode}');
-  //     }
-  //   } catch (e) {
-  //     print('에러 발생: $e');
-  //   }
-  // }
 
   @override
   Widget build(BuildContext context) {
@@ -255,48 +298,49 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
                 title: Text(Localization.of(context).string('drag_pdf')),
                 actions: [
                   IconButton(
-                    onPressed: () => showDialog<String>(
-                      context: context,
-                      builder: (BuildContext context) => AlertDialog(
-                        title: Text(Localization.of(context)
-                            .string('choose_an_option')),
-                        // Choose an option
-                        content: Text(Localization.of(context)
-                            .string('content_home_screen_dialog')),
-                        // 'Do you want to load the file(s) from disk or from the document scanner?'
-                        actions: [
-                          TextButton(
-                            onPressed: () {
-                              context.pop();
-                              FileDialog.add(
-                                  context: context,
-                                  loadImageFromGallery: () async =>
-                                      await loadFilesOrImages(
-                                          LoaderOf.imagesFromGallery),
-                                  loadFileFromFileSystem: () async =>
-                                      await loadFilesOrImages(
-                                          LoaderOf.filesFromFileSystem));
-                            },
-                            child: Text(Localization.of(context)
-                                .string('load')), // LOAD
-                          ),
-                          TextButton(
-                            onPressed: () async => await scanImages(),
-                            child: Text(Localization.of(context)
-                                .string('scan')), // SCAN
-                          ),
-                          TextButton(
-                            onPressed: () => context.pop('Cancel'),
-                            child: Text(
-                              Localization.of(context)
-                                  .string('cancel'), // Cancel
-                              style:
-                                  const TextStyle(color: ColorsApp.kMainColor),
-                            ),
-                          )
-                        ],
-                      ),
-                    ),
+                    // onPressed: () => showDialog<String>(
+                    //   context: context,
+                    //   builder: (BuildContext context) => AlertDialog(
+                    //     title: Text(Localization.of(context)
+                    //         .string('choose_an_option')),
+                    //     content: Text(Localization.of(context)
+                    //         .string('content_home_screen_dialog')),
+                    //     actions: [
+                    //       TextButton(
+                    //         onPressed: () {
+                    //           context.pop();
+                    //           FileDialog.add(
+                    //               context: context,
+                    //               loadImageFromGallery: () async =>
+                    //                   await loadFilesOrImages(
+                    //                       LoaderOf.imagesFromGallery),
+                    //               loadFileFromFileSystem: () async =>
+                    //                   await loadFilesOrImages(
+                    //                       LoaderOf.filesFromFileSystem));
+                    //         },
+                    //         child: Text(Localization.of(context)
+                    //             .string('load')), // LOAD
+                    //       ),
+                    //       TextButton(
+                    //         onPressed: () async => await scanImages(),
+                    //         child: Text(Localization.of(context)
+                    //             .string('scan')), // SCAN
+                    //       ),
+                    //       TextButton(
+                    //         onPressed: () => context.pop('Cancel'),
+                    //         child: Text(
+                    //           Localization.of(context)
+                    //               .string('cancel'), // Cancel
+                    //           style:
+                    //               const TextStyle(color: ColorsApp.kMainColor),
+                    //         ),
+                    //       )
+                    //     ],
+                    //   ),
+                    // ),
+                    // icon: const Icon(Icons.add),
+                    onPressed: () async =>
+                        await scanImages(), // 다이얼로그 대신 scanImages 호출
                     icon: const Icon(Icons.add),
                   )
                 ],

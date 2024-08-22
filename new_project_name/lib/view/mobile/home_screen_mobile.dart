@@ -1,13 +1,3 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:drag_pdf/model/file_read.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
-import 'package:path/path.dart' as path;
-import 'package:image/image.dart' as img;
-import 'package:path_provider/path_provider.dart';
-import 'package:pdf_render/pdf_render.dart' as pdf_render;
-
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 
 import 'package:flutter/material.dart';
@@ -16,7 +6,6 @@ import 'package:drag_pdf/common/colors/colors_app.dart';
 import 'package:drag_pdf/common/localization/localization.dart';
 import 'package:drag_pdf/components/components.dart';
 import 'package:drag_pdf/model/enums/loader_of.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../helper/dialogs/custom_dialog.dart';
 import '../../helper/helpers.dart';
@@ -33,10 +22,12 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
     with WidgetsBindingObserver {
   final HomeViewModel viewModel = HomeViewModel();
 
-  // QR 스캔 관련 변수 추가
+  // QR or Barcode 스캔 관련 변수 추가
+  //----------------------------------------------------------------------
   final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
   QRViewController? qrController;
   String scannedTitle = '';
+  bool isBarcodeMode = false;
 
   @override
   void initState() {
@@ -87,7 +78,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
       switch (from) {
         case LoaderOf.imagesFromGallery:
           await viewModel.loadImagesFromStorage();
-          break; // 각 case 문 끝에 break 추가
+          break;
         case LoaderOf.filesFromFileSystem:
           await viewModel.loadFilesFromStorage();
           break;
@@ -97,7 +88,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
           error.toString().contains(HomeViewModel.extensionForbidden)
               ? "forbidden_file_error_subtitle"
               : "read_file_error_subtitle";
-      if (!mounted) return; // check "mounted" property
+      if (!mounted) return;
       CustomDialog.showError(
           context: context,
           error: error,
@@ -112,87 +103,150 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
     }
   }
 
+  // 스캔 모드 선택 다이얼로그 ( 추후 UI 꾸며야 함)
+  //----------------------------------------------------------------------
+  Future<void> _showScanModeDialog() async {
+    return showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Select Scan Mode'),
+          content: SingleChildScrollView(
+            child: ListBody(
+              children: <Widget>[
+                GestureDetector(
+                  child: const Text('Scan QR Code'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showQRView(context, false); // QR 코드 모드로 스캔
+                  },
+                ),
+                const Padding(padding: EdgeInsets.all(8.0)),
+                GestureDetector(
+                  child: const Text('Scan Barcode'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    _showQRView(context, true); // 바코드 모드로 스캔
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   // QR 코드 스캔을 처리하는 메서드 추가
-  Future<void> _showQRView(BuildContext context) async {
+  //----------------------------------------------------------------------------
+  Future<void> _showQRView(BuildContext context, bool isBarcodeMode) async {
     await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => Scaffold(
           appBar: AppBar(
-            title: Text('SCAN QR CODE'),
+            title: Text(isBarcodeMode ? 'SCAN BARCODE' : 'SCAN QR CODE'),
           ),
           body: Stack(
             children: [
               QRView(
                 key: qrKey,
                 onQRViewCreated: _onQRViewCreated,
-              ),
-              // QR 코드 스캔을 위한 모서리 가이드라인 추가
-              Center(
-                child: Container(
-                  width: 250, // 가이드라인의 너비
-                  height: 250, // 가이드라인의 높이
-                  child: Stack(
-                    children: [
-                      // 좌상단 모서리
-                      Align(
-                        alignment: Alignment.topLeft,
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: Colors.white, width: 4),
-                              left: BorderSide(color: Colors.white, width: 4),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // 우상단 모서리
-                      Align(
-                        alignment: Alignment.topRight,
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: Colors.white, width: 4),
-                              right: BorderSide(color: Colors.white, width: 4),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // 좌하단 모서리
-                      Align(
-                        alignment: Alignment.bottomLeft,
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(color: Colors.white, width: 4),
-                              left: BorderSide(color: Colors.white, width: 4),
-                            ),
-                          ),
-                        ),
-                      ),
-                      // 우하단 모서리
-                      Align(
-                        alignment: Alignment.bottomRight,
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: const BoxDecoration(
-                            border: Border(
-                              bottom: BorderSide(color: Colors.white, width: 4),
-                              right: BorderSide(color: Colors.white, width: 4),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+                overlay: QrScannerOverlayShape(
+                  borderColor: Colors.red,
+                  borderRadius: 10,
+                  borderLength: 30,
+                  borderWidth: 10,
+                  cutOutWidth: isBarcodeMode ? 300.0 : 250.0,
+                  cutOutHeight: isBarcodeMode ? 100.0 : 250.0,
                 ),
               ),
+              if (isBarcodeMode)
+                // 바코드 모드용 가이드라인
+                Center(
+                  child: Container(
+                    width: 300, // 바코드 스캔 가이드라인의 너비
+                    height: 100, // 바코드 스캔 가이드라인의 높이
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 4,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                )
+              else
+                // QR 코드 모드용 가이드라인
+                Center(
+                  child: Container(
+                    width: 250, // QR 코드 스캔 가이드라인의 너비
+                    height: 250, // QR 코드 스캔 가이드라인의 높이
+                    child: Stack(
+                      children: [
+                        // 좌상단 모서리
+                        Align(
+                          alignment: Alignment.topLeft,
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: const BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Colors.white, width: 4),
+                                left: BorderSide(color: Colors.white, width: 4),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // 우상단 모서리
+                        Align(
+                          alignment: Alignment.topRight,
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: const BoxDecoration(
+                              border: Border(
+                                top: BorderSide(color: Colors.white, width: 4),
+                                right:
+                                    BorderSide(color: Colors.white, width: 4),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // 좌하단 모서리
+                        Align(
+                          alignment: Alignment.bottomLeft,
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: const BoxDecoration(
+                              border: Border(
+                                bottom:
+                                    BorderSide(color: Colors.white, width: 4),
+                                left: BorderSide(color: Colors.white, width: 4),
+                              ),
+                            ),
+                          ),
+                        ),
+                        // 우하단 모서리
+                        Align(
+                          alignment: Alignment.bottomRight,
+                          child: Container(
+                            width: 50,
+                            height: 50,
+                            decoration: const BoxDecoration(
+                              border: Border(
+                                bottom:
+                                    BorderSide(color: Colors.white, width: 4),
+                                right:
+                                    BorderSide(color: Colors.white, width: 4),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -220,49 +274,33 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
           scannedTitle = scanData.code ?? "Unknown"; // QR 코드 스캔 결과 저장
         });
 
-        // QR 코드 텍스트를 확대하여 사용자에게 보여줌
-        await _showScannedQRCodeText(scanData.code ?? "Unknown");
-
         controller.stopCamera(); // 스캔이 완료되면 카메라 멈춤
+
+        // 스캔 후 문서 스캔 화면으로 이동
         Navigator.of(context).pop(); // 스캔 화면 닫기
+        _navigateToDocumentScanner(context, scannedTitle);
       }
     });
   }
 
-// QR 코드 텍스트를 확대하여 보여주는 메서드
-  Future<void> _showScannedQRCodeText(String code) async {
-    await showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text("QR Code Scanned"),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                code,
-                style: TextStyle(fontSize: 24), // QR 코드 텍스트를 크게 표시
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: Text("OK"),
-            ),
-          ],
-        );
-      },
-    );
+  Future<void> _navigateToDocumentScanner(
+      BuildContext context, String title) async {
+    // 문서 스캔 화면으로 전환
+    final fileread = await viewModel.scanDocument(title); // QR 코드 정보 전달
+    if (fileread != null) {
+      setState(() {
+        Utils.printInDebug("Document Scanned: ${fileread.getName()}");
+      });
+    }
   }
 
   Future<void> scanImages() async {
     try {
-      // QR/바코드 스캔을 먼저 수행
-      await _showQRView(context);
+      // 이전 스캔 타이틀 초기화
+      scannedTitle = '';
+
+      // QR/바코드 스캔 방식을 먼저 선택
+      await _showScanModeDialog();
 
       // 이후 스캔 결과를 사용하여 문서 스캔
       if (scannedTitle.isNotEmpty) {
@@ -298,47 +336,6 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
                 title: Text(Localization.of(context).string('drag_pdf')),
                 actions: [
                   IconButton(
-                    // onPressed: () => showDialog<String>(
-                    //   context: context,
-                    //   builder: (BuildContext context) => AlertDialog(
-                    //     title: Text(Localization.of(context)
-                    //         .string('choose_an_option')),
-                    //     content: Text(Localization.of(context)
-                    //         .string('content_home_screen_dialog')),
-                    //     actions: [
-                    //       TextButton(
-                    //         onPressed: () {
-                    //           context.pop();
-                    //           FileDialog.add(
-                    //               context: context,
-                    //               loadImageFromGallery: () async =>
-                    //                   await loadFilesOrImages(
-                    //                       LoaderOf.imagesFromGallery),
-                    //               loadFileFromFileSystem: () async =>
-                    //                   await loadFilesOrImages(
-                    //                       LoaderOf.filesFromFileSystem));
-                    //         },
-                    //         child: Text(Localization.of(context)
-                    //             .string('load')), // LOAD
-                    //       ),
-                    //       TextButton(
-                    //         onPressed: () async => await scanImages(),
-                    //         child: Text(Localization.of(context)
-                    //             .string('scan')), // SCAN
-                    //       ),
-                    //       TextButton(
-                    //         onPressed: () => context.pop('Cancel'),
-                    //         child: Text(
-                    //           Localization.of(context)
-                    //               .string('cancel'), // Cancel
-                    //           style:
-                    //               const TextStyle(color: ColorsApp.kMainColor),
-                    //         ),
-                    //       )
-                    //     ],
-                    //   ),
-                    // ),
-                    // icon: const Icon(Icons.add),
                     onPressed: () async =>
                         await scanImages(), // 다이얼로그 대신 scanImages 호출
                     icon: const Icon(Icons.add),

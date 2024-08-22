@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
+
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image/image.dart';
@@ -7,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:drag_pdf/helper/file_helper.dart';
 import 'package:drag_pdf/helper/pdf_helper.dart';
 import 'package:drag_pdf/model/file_read.dart';
+import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
@@ -16,6 +19,9 @@ import '../model/enums/supported_file_type.dart';
 class FileManager {
   final List<FileRead> _filesInMemory = [];
   final FileHelper fileHelper;
+
+  // OCR 인식을 위한 TextRecognizer 객체
+  final textRecognizer = TextRecognizer();
 
   FileManager(this.fileHelper);
 
@@ -154,6 +160,35 @@ class FileManager {
     return names;
   }
 
+  // Future<FileRead?> scanDocument(String qrCode) async {
+  //   FileRead? fileRead;
+  //   List<String>? paths = await CunningDocumentScanner.getPictures();
+  //   if (paths != null && paths.isNotEmpty) {
+  //     final pdf = pw.Document();
+  //     File file;
+  //     for (String path in paths) {
+  //       final image = pw.MemoryImage(
+  //         File(path).readAsBytesSync(),
+  //       );
+
+  //       pdf.addPage(pw.Page(build: (pw.Context context) {
+  //         return pw.Center(
+  //           child: pw.Image(image),
+  //         );
+  //       }));
+  //     }
+  //     // QR 코드 정보를 파일 이름으로 설정
+  //     final fileName = qrCode.isNotEmpty ? qrCode : _nameOfNextFile();
+  //     file = File('${fileHelper.localPath}$fileName.pdf');
+  //     await file.writeAsBytes(await pdf.save());
+
+  //     final size = await file.length();
+  //     fileRead = FileRead(file, fileName, null, size, "pdf");
+  //     _addSingleFile(fileRead, fileHelper.localPath);
+  //   }
+  //   return fileRead;
+  // }
+
   Future<FileRead?> scanDocument(String qrCode) async {
     FileRead? fileRead;
     List<String>? paths = await CunningDocumentScanner.getPictures();
@@ -161,19 +196,46 @@ class FileManager {
       final pdf = pw.Document();
       File file;
       for (String path in paths) {
+        // OCR 인식
+        String ocrText = await _performOCR(path);
+
+        // 이미지 파일을 불러오기
         final image = pw.MemoryImage(
           File(path).readAsBytesSync(),
         );
 
-        pdf.addPage(pw.Page(build: (pw.Context context) {
-          return pw.Center(
-            child: pw.Image(image),
-          );
-        }));
+        // PDF 페이지에 이미지 및 OCR 결과 추가
+        pdf.addPage(
+          pw.Page(
+            build: (pw.Context context) {
+              return pw.Stack(
+                children: [
+                  pw.Center(child: pw.Image(image)), // 이미지 추가
+                  pw.Positioned(
+                    bottom: 10,
+                    left: 10,
+                    child: pw.Container(
+                      width: 500,
+                      color: PdfColors.white,
+                      child: pw.Text(
+                        ocrText,
+                        style: const pw.TextStyle(
+                            fontSize: 12, color: PdfColors.black),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
       }
+
       // QR 코드 정보를 파일 이름으로 설정
       final fileName = qrCode.isNotEmpty ? qrCode : _nameOfNextFile();
       file = File('${fileHelper.localPath}$fileName.pdf');
+
+      // PDF 저장
       await file.writeAsBytes(await pdf.save());
 
       final size = await file.length();
@@ -181,6 +243,22 @@ class FileManager {
       _addSingleFile(fileRead, fileHelper.localPath);
     }
     return fileRead;
+  }
+
+// OCR 인식을 수행하는 메서드
+  Future<String> _performOCR(String imagePath) async {
+    final inputImage = InputImage.fromFilePath(imagePath);
+    final recognizedText = await textRecognizer.processImage(inputImage);
+
+    StringBuffer ocrText = StringBuffer();
+
+    for (TextBlock block in recognizedText.blocks) {
+      for (TextLine line in block.lines) {
+        ocrText.writeln(line.text); // 라인 단위로 텍스트를 추가합니다.
+      }
+    }
+
+    return ocrText.toString(); // OCR 인식 결과를 문자열로 반환합니다.
   }
 
   Future<FileRead> generatePreviewPdfDocument(

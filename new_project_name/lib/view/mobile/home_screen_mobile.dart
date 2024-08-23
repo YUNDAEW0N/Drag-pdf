@@ -332,67 +332,114 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
 
     return PopScope(
       canPop: true,
-      child: Loading.isPresented
-          ? const LoadingScreen()
-          : Scaffold(
-              appBar: AppBar(
-                automaticallyImplyLeading: false,
-                title: Text(Localization.of(context).string('drag_pdf')),
-                actions: [
-                  IconButton(
-                    onPressed: () async => await scanImages(),
-                    icon: const Icon(Icons.add),
-                  )
-                ],
-              ),
-              body: folderNames.isNotEmpty
-                  ? ListView.builder(
-                      itemCount: folderNames.length,
-                      itemBuilder: (context, index) {
-                        final folderName = folderNames[index];
-                        return ListTile(
-                          title: Text(folderName),
-                          onTap: () {
-                            viewModel.openFolder(folderName, context);
-                          },
-                        );
-                      },
-                    )
-                  : Center(
-                      child: Image.asset('assets/images/files/file.png'),
+      child: Scaffold(
+        appBar: AppBar(
+          automaticallyImplyLeading: false,
+          title: Text(Localization.of(context).string('drag_pdf')),
+          actions: [
+            IconButton(
+              onPressed: () async => await scanImages(),
+              icon: const Icon(Icons.add),
+            ),
+          ],
+        ),
+        body: folderNames.isNotEmpty
+            ? ListView.builder(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                itemCount: folderNames.length,
+                itemBuilder: (context, index) {
+                  final folderName = folderNames[index];
+                  return Card(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10.0),
                     ),
-              floatingActionButton: Visibility(
-                visible: folderNames.isNotEmpty,
-                child: FloatingActionButton(
-                  onPressed: () async {
-                    setState(() {
-                      Loading.show();
-                    });
-                    try {
-                      final file = await viewModel.generatePreviewPdfDocument();
-                      setState(() {
-                        Utils.openFileProperly(context, file);
-                      });
-                    } catch (error) {
-                      if (!context.mounted) return;
-                      CustomDialog.showError(
-                        context: context,
-                        error: error,
-                        titleLocalized: 'generate_file_error_title',
-                        subtitleLocalized: 'generate_file_error_subtitle',
-                        buttonTextLocalized: 'accept',
-                      );
-                    } finally {
-                      setState(() {
-                        Loading.hide();
-                      });
-                    }
-                  },
-                  backgroundColor: ColorsApp.kMainColor,
-                  child: const Icon(Icons.arrow_forward),
+                    elevation: 4.0,
+                    child: ListTile(
+                      leading: const Icon(
+                        Icons.folder,
+                        color: ColorsApp.kMainColor,
+                        size: 40,
+                      ),
+                      title: Text(
+                        folderName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: ColorsApp.kMainColor,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '폴더 번호: $folderName',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.arrow_forward_ios,
+                        color: ColorsApp.kMainColor,
+                        size: 20,
+                      ),
+                      onTap: () {
+                        viewModel.openFolder(folderName, context);
+                      },
+                    ),
+                  );
+                },
+              )
+            : Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Image.asset(
+                      'assets/images/files/file.png',
+                      height: 100,
+                      width: 100,
+                    ),
+                    const SizedBox(height: 20),
+                    Text(
+                      '저장된 폴더가 없습니다.',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+        // floatingActionButton: Visibility(
+        //   visible: folderNames.isNotEmpty,
+        //   child: FloatingActionButton(
+        //     onPressed: () async {
+        //       setState(() {
+        //         Loading.show();
+        //       });
+        //       try {
+        //         final file = await viewModel.generatePreviewPdfDocument();
+        //         setState(() {
+        //           Utils.openFileProperly(context, file);
+        //         });
+        //       } catch (error) {
+        //         if (!context.mounted) return;
+        //         CustomDialog.showError(
+        //           context: context,
+        //           error: error,
+        //           titleLocalized: 'generate_file_error_title',
+        //           subtitleLocalized: 'generate_file_error_subtitle',
+        //           buttonTextLocalized: 'accept',
+        //         );
+        //       } finally {
+        //         setState(() {
+        //           Loading.hide();
+        //         });
+        //       }
+        //     },
+        //     backgroundColor: ColorsApp.kMainColor,
+        //     child: const Icon(Icons.arrow_forward),
+        //   ),
+        // ),
+      ),
     );
   }
 }

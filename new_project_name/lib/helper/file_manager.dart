@@ -13,7 +13,6 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
-import 'package:tflite/tflite.dart';
 
 import '../model/enums/supported_file_type.dart';
 

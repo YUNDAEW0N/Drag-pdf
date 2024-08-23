@@ -285,6 +285,29 @@ class FileManager {
   }
 
   // OCR 인식을 수행하는 메서드
+  // Future<String> _performOCR(String imagePath) async {
+  //   final inputImage = InputImage.fromFilePath(imagePath);
+  //   final recognizedText = await textRecognizer.processImage(inputImage);
+
+  //   StringBuffer ocrText = StringBuffer();
+
+  //   for (TextBlock block in recognizedText.blocks) {
+  //     for (TextLine line in block.lines) {
+  //       ocrText.writeln(line.text);
+  //     }
+  //   }
+
+  //   String ocrResult = ocrText.toString().trim();
+
+  //   print("변환 전 OCR 결과: $ocrResult");
+
+  //   // 후처리로 텍스트 변환
+  //   String finalResult = _replaceCharacters(ocrResult);
+
+  //   print("최종 OCR 결과: $finalResult");
+  //   return finalResult;
+  // }
+
   Future<String> _performOCR(String imagePath) async {
     final inputImage = InputImage.fromFilePath(imagePath);
     final recognizedText = await textRecognizer.processImage(inputImage);
@@ -302,7 +325,17 @@ class FileManager {
     print("변환 전 OCR 결과: $ocrResult");
 
     // 후처리로 텍스트 변환
-    String finalResult = _replaceCharacters(ocrResult);
+    String processedText = _replaceCharacters(ocrResult);
+
+    // 정규식을 사용하여 숫자 4자리-숫자 4자리-숫자 4자리 패턴만 추출
+    final regex = RegExp(r'\b\d{4}-\d{4}-\d{4}\b');
+    final matches = regex
+        .allMatches(processedText)
+        .map((match) => match.group(0))
+        .join('\n');
+
+    String finalResult =
+        matches.isNotEmpty ? matches : "No valid pattern found";
 
     print("최종 OCR 결과: $finalResult");
     return finalResult;

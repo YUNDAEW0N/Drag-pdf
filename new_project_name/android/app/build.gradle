@@ -5,6 +5,11 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+dependencies {
+    implementation 'com.google.mlkit:text-recognition-korean:16.0.0'
+}
+
+
 android {
     namespace = "com.example.new_project_name"
     compileSdk = flutter.compileSdkVersion

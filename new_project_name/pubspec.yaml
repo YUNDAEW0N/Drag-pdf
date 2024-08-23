@@ -61,6 +61,7 @@ dependencies:
   pdf_render: ^1.4.10
   qr_code_scanner: ^1.0.1
   google_mlkit_text_recognition: ^0.13.0
+  tflite: ^1.1.2
 
 flutter_icons:
   image_path_android: "assets/icons/android-icon.png"
@@ -101,3 +102,5 @@ flutter:
     - assets/images/
     - assets/images/files/
     - assets/icons/
+    - assets/mnist_model.tflite
+    - assets/labels.txt

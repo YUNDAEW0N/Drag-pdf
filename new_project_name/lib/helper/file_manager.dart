@@ -13,6 +13,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
+import 'package:tflite/tflite.dart';
 
 import '../model/enums/supported_file_type.dart';
 
@@ -160,92 +161,131 @@ class FileManager {
     return names;
   }
 
-  // Future<FileRead?> scanDocument(String qrCode) async {
-  //   FileRead? fileRead;
-  //   List<String>? paths = await CunningDocumentScanner.getPictures();
-  //   if (paths != null && paths.isNotEmpty) {
-  //     final pdf = pw.Document();
-  //     File file;
-  //     for (String path in paths) {
-  //       final image = pw.MemoryImage(
-  //         File(path).readAsBytesSync(),
-  //       );
-
-  //       pdf.addPage(pw.Page(build: (pw.Context context) {
-  //         return pw.Center(
-  //           child: pw.Image(image),
-  //         );
-  //       }));
-  //     }
-  //     // QR 코드 정보를 파일 이름으로 설정
-  //     final fileName = qrCode.isNotEmpty ? qrCode : _nameOfNextFile();
-  //     file = File('${fileHelper.localPath}$fileName.pdf');
-  //     await file.writeAsBytes(await pdf.save());
-
-  //     final size = await file.length();
-  //     fileRead = FileRead(file, fileName, null, size, "pdf");
-  //     _addSingleFile(fileRead, fileHelper.localPath);
-  //   }
-  //   return fileRead;
-  // }
+  // 바코드별 파일 카운트를 저장하는 맵
+  final Map<String, int> folderFileCounts = {};
 
   Future<FileRead?> scanDocument(String qrCode) async {
     FileRead? fileRead;
     List<String>? paths = await CunningDocumentScanner.getPictures();
     if (paths != null && paths.isNotEmpty) {
-      final pdf = pw.Document();
-      File file;
-      for (String path in paths) {
-        // OCR 인식
-        String ocrText = await _performOCR(path);
+      // 바코드 번호를 폴더 이름으로 사용
+      final folderPath = path.join(fileHelper.localPath, qrCode);
+      final folder = Directory(folderPath);
 
-        // 이미지 파일을 불러오기
-        final image = pw.MemoryImage(
-          File(path).readAsBytesSync(),
-        );
-
-        // PDF 페이지에 이미지 및 OCR 결과 추가
-        pdf.addPage(
-          pw.Page(
-            build: (pw.Context context) {
-              return pw.Stack(
-                children: [
-                  pw.Center(child: pw.Image(image)), // 이미지 추가
-                  pw.Positioned(
-                    bottom: 10,
-                    left: 10,
-                    child: pw.Container(
-                      width: 500,
-                      color: PdfColors.white,
-                      child: pw.Text(
-                        ocrText,
-                        style: const pw.TextStyle(
-                            fontSize: 12, color: PdfColors.black),
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        );
+      // 폴더가 없으면 생성
+      if (!folder.existsSync()) {
+        folder.createSync(recursive: true);
+        // 새 폴더일 경우 카운트를 1로 초기화
+        folderFileCounts[qrCode] = 1;
+      } else {
+        // 기존 폴더일 경우 카운트를 가져옴
+        folderFileCounts[qrCode] ??= 1;
       }
 
-      // QR 코드 정보를 파일 이름으로 설정
-      final fileName = qrCode.isNotEmpty ? qrCode : _nameOfNextFile();
-      file = File('${fileHelper.localPath}$fileName.pdf');
+      for (String imgpath in paths) {
+        // OCR 인식
+        String ocrText = await _performOCR(imgpath);
 
-      // PDF 저장
-      await file.writeAsBytes(await pdf.save());
+        // 이미지 파일을 불러오기
+        final image = decodeImage(File(imgpath).readAsBytesSync());
 
-      final size = await file.length();
-      fileRead = FileRead(file, fileName, null, size, "pdf");
-      _addSingleFile(fileRead, fileHelper.localPath);
+        if (image != null) {
+          // 파일 이름을 "바코드번호-카운트.jpg" 형식으로 설정
+          final fileName = "$qrCode-${folderFileCounts[qrCode]}.jpg";
+          final outputFilePath = path.join(folderPath, fileName);
+
+          // JPG 파일로 저장
+          File(outputFilePath).writeAsBytesSync(encodeJpg(image));
+
+          final file = File(outputFilePath);
+          final size = await file.length();
+          fileRead = FileRead(file, fileName, image, size, "jpg");
+          fileRead.setOcrText(ocrText); // OCR 텍스트 설정
+
+          // OCR 텍스트를 파일로 저장
+          File('${outputFilePath}.ocr.txt').writeAsStringSync(ocrText);
+
+          print('SCANDOCUMENT: $ocrText');
+          _addSingleFile(fileRead, folderPath);
+
+          // 다음 파일을 위해 카운터 증가
+          folderFileCounts[qrCode] = folderFileCounts[qrCode]! + 1;
+        }
+      }
     }
     return fileRead;
   }
 
-// OCR 인식을 수행하는 메서드
+  List<FileRead> loadFilesFromFolder(String folderName) {
+    final folderPath = path.join(fileHelper.localPath, folderName);
+    final folder = Directory(folderPath);
+    final files = <FileRead>[];
+
+    if (folder.existsSync()) {
+      for (var file in folder.listSync()) {
+        if (file is File && file.path.endsWith('.jpg')) {
+          final image = decodeImage(file.readAsBytesSync());
+          final size = file.lengthSync();
+          final fileRead = FileRead(file, path.basename(file.path), image, size,
+              path.extension(file.path).substring(1));
+
+          // OCR 텍스트 복구
+          fileRead.loadOcrText();
+
+          files.add(fileRead);
+        }
+      }
+    }
+    return files;
+  }
+
+  // 폴더 목록을 불러오는 메서드
+  List<String> loadFolderNames() {
+    final directory = Directory(fileHelper.localPath);
+    final folders = <String>[];
+
+    if (directory.existsSync()) {
+      for (var entity in directory.listSync()) {
+        if (entity is Directory) {
+          folders.add(path.basename(entity.path));
+        }
+      }
+    }
+
+    return folders;
+  }
+
+  final Map<String, String> replacements = {
+    'A': '4', 'a': '4', 'B': '8', 'b': '6', //
+    'C': '0', 'c': '0', 'D': '0', 'd': '0', //
+    'E': '3', 'e': '3', 'F': '7', 'f': '7', //
+    'G': '6', 'g': '6', 'h': '6', 'H': '4', //
+    'I': '1', 'i': '1', 'l': '1', 'L': '1', //
+    '|': '1', '/': '1', 'J': '1', 'j': '1', //
+    'K': '1', 'k': '1', 'M': '4', 'm': '4', //
+    'N': '7', 'n': '7', 'O': '0', 'o': '0', //
+    'P': '9', 'p': '9', 'Q': '0', 'q': '9', //
+    'R': '2', 'r': '2', 'S': '5', 's': '5', //
+    'T': '7', 't': '7', 'U': '0', 'u': '0', //
+    'V': '7', 'v': '7', 'W': '3', 'w': '3', //
+    'X': '8', 'x': '8', 'Y': '4', 'y': '4', //
+    'Z': '2', 'z': '2', ' ': '', '[': '1', //
+  };
+
+  // 후처리 메서드
+  String _replaceCharacters(String input) {
+    StringBuffer replacedText = StringBuffer();
+
+    for (int i = 0; i < input.length; i++) {
+      String char = input[i];
+      // replacements 맵에서 해당 문자를 찾고, 없으면 그대로 추가
+      replacedText.write(replacements[char] ?? char);
+    }
+
+    return replacedText.toString();
+  }
+
+  // OCR 인식을 수행하는 메서드
   Future<String> _performOCR(String imagePath) async {
     final inputImage = InputImage.fromFilePath(imagePath);
     final recognizedText = await textRecognizer.processImage(inputImage);
@@ -254,11 +294,44 @@ class FileManager {
 
     for (TextBlock block in recognizedText.blocks) {
       for (TextLine line in block.lines) {
-        ocrText.writeln(line.text); // 라인 단위로 텍스트를 추가합니다.
+        ocrText.writeln(line.text);
       }
     }
 
-    return ocrText.toString(); // OCR 인식 결과를 문자열로 반환합니다.
+    String ocrResult = ocrText.toString().trim();
+
+    print("변환 전 OCR 결과: $ocrResult");
+
+    // 후처리로 텍스트 변환
+    String finalResult = _replaceCharacters(ocrResult);
+
+    print("최종 OCR 결과: $finalResult");
+    return finalResult;
+  }
+
+  void initializeFolderFileCounts() {
+    final directory = Directory(fileHelper.localPath);
+    if (directory.existsSync()) {
+      for (var entity in directory.listSync()) {
+        if (entity is Directory) {
+          final folderName = path.basename(entity.path);
+          final fileCount = _getFileCountInFolder(entity.path);
+          folderFileCounts[folderName] = fileCount + 1; // 다음 파일이 생성될 번호
+        }
+      }
+    }
+  }
+
+  int _getFileCountInFolder(String folderPath) {
+    final folder = Directory(folderPath);
+    if (folder.existsSync()) {
+      // '.jpg' 파일만 계산
+      return folder
+          .listSync()
+          .where((entity) => entity.path.endsWith('.jpg'))
+          .length;
+    }
+    return 0;
   }
 
   Future<FileRead> generatePreviewPdfDocument(

@@ -2,7 +2,10 @@ import 'package:drag_pdf/helper/file_manager.dart';
 import 'package:drag_pdf/helper/helpers.dart';
 import 'package:drag_pdf/model/enums/supported_file_type.dart';
 import 'package:drag_pdf/model/file_read.dart';
+import 'package:drag_pdf/view/mobile/document_screen_mobile.dart';
+import 'package:drag_pdf/view/mobile/folder_screen_mobile.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 
@@ -87,5 +90,30 @@ class HomeViewModel {
     AppSession.singleton.fileHelper.removeIfExist(pathFinal);
     return await _mfl.generatePreviewPdfDocument(
         pathFinal, Utils.nameOfFinalFile);
+  }
+
+  // 폴더 목록을 불러오는 메서드
+  List<String> getFolderNames() {
+    return _mfl.loadFolderNames();
+  }
+
+  Future<void> openFolder(String folderName, BuildContext context) async {
+    final files = _mfl.loadFilesFromFolder(folderName);
+    if (files.isNotEmpty) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => FolderFilesScreen(
+            files: files,
+            folderName: folderName,
+          ),
+        ),
+      );
+    } else {
+      // 파일이 없는 경우에 대한 처리
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('폴더에 파일이 없습니다.')),
+      );
+    }
   }
 }

@@ -1,3 +1,4 @@
+import 'package:drag_pdf/view/mobile/document_screen_mobile.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 
 import 'package:flutter/material.dart';
@@ -285,11 +286,12 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
 
   Future<void> _navigateToDocumentScanner(
       BuildContext context, String title) async {
-    // 문서 스캔 화면으로 전환
-    final fileread = await viewModel.scanDocument(title); // QR 코드 정보 전달
-    if (fileread != null) {
+    final fileRead = await viewModel.scanDocument(title);
+    if (fileRead != null) {
+      // 폴더 목록 화면을 새로고침하거나 이동
       setState(() {
-        Utils.printInDebug("Document Scanned: ${fileread.getName()}");
+        // 폴더 목록 화면으로 돌아가 폴더를 선택할 수 있게 함
+        viewModel.getFolderNames();
       });
     }
   }
@@ -326,6 +328,8 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
 
   @override
   Widget build(BuildContext context) {
+    final folderNames = viewModel.getFolderNames();
+
     return PopScope(
       canPop: true,
       child: Loading.isPresented
@@ -336,109 +340,29 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
                 title: Text(Localization.of(context).string('drag_pdf')),
                 actions: [
                   IconButton(
-                    onPressed: () async =>
-                        await scanImages(), // 다이얼로그 대신 scanImages 호출
+                    onPressed: () async => await scanImages(),
                     icon: const Icon(Icons.add),
                   )
                 ],
               ),
-              body: viewModel.thereAreFilesLoaded()
-                  ? ReorderableListView.builder(
-                      proxyDecorator: (child, index, animation) =>
-                          ColorFiltered(
-                              colorFilter: ColorFilter.mode(
-                                  Colors.blueAccent.withOpacity(0.2),
-                                  BlendMode.srcATop),
-                              child: child),
-                      itemCount:
-                          viewModel.getMergeableFilesList().numberOfFiles(),
-                      padding: const EdgeInsets.all(8),
-                      onReorderStart: (int value) =>
-                          HapticFeedback.mediumImpact(),
-                      itemBuilder: (context, position) {
-                        final file =
-                            viewModel.getMergeableFilesList().getFile(position);
-                        return Dismissible(
-                          key: Key("${file.hashCode}"),
-                          direction: DismissDirection.endToStart,
-                          onDismissed: (direction) async {
-                            viewModel.removeFileFromDisk(position);
-                            setState(() {
-                              // Then show a snackbar.
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                      '${Localization.of(context).string('removed_toast')} ${file.getName()}'),
-                                ),
-                              );
-                            });
+              body: folderNames.isNotEmpty
+                  ? ListView.builder(
+                      itemCount: folderNames.length,
+                      itemBuilder: (context, index) {
+                        final folderName = folderNames[index];
+                        return ListTile(
+                          title: Text(folderName),
+                          onTap: () {
+                            viewModel.openFolder(folderName, context);
                           },
-                          background: Container(
-                            color: ColorsApp.red,
-                            child: const Padding(
-                              padding: EdgeInsets.only(right: 30),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.end,
-                                children: [
-                                  Icon(
-                                    Icons.delete,
-                                    color: ColorsApp.white,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          child: FileRow(
-                            file: file,
-                            removeButtonPressed: () {
-                              setState(() {
-                                viewModel.removeFileFromDiskByFile(file);
-                              });
-                            },
-                            rotateButtonPressed: () async {
-                              setState(() {
-                                Loading.show();
-                              });
-                              await viewModel.rotateImageInMemoryAndFile(file);
-                              setState(() {
-                                Loading.hide();
-                              });
-                            },
-                            resizeButtonPressed: (int width, int height) async {
-                              setState(() {
-                                Loading.show();
-                              });
-                              await viewModel.resizeImageInMemoryAndFile(
-                                  file, width, height);
-                              setState(() {
-                                Loading.hide();
-                              });
-                            },
-                            renameButtonPressed: (String name) async {
-                              await viewModel.renameFile(file, name);
-                              setState(() {
-                                Utils.printInDebug("Renamed File: $file");
-                              });
-                            },
-                          ),
                         );
-                      },
-                      onReorder: (int oldIndex, int newIndex) {
-                        if (newIndex > oldIndex) {
-                          newIndex = newIndex - 1;
-                        }
-                        setState(() {
-                          final element =
-                              viewModel.removeFileFromList(oldIndex);
-                          viewModel.insertFileIntoList(newIndex, element);
-                        });
                       },
                     )
                   : Center(
                       child: Image.asset('assets/images/files/file.png'),
                     ),
               floatingActionButton: Visibility(
-                visible: viewModel.thereAreFilesLoaded(),
+                visible: folderNames.isNotEmpty,
                 child: FloatingActionButton(
                   onPressed: () async {
                     setState(() {
@@ -450,7 +374,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
                         Utils.openFileProperly(context, file);
                       });
                     } catch (error) {
-                      if (!context.mounted) return; // check "mounted" property
+                      if (!context.mounted) return;
                       CustomDialog.showError(
                         context: context,
                         error: error,

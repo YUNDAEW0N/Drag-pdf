@@ -1,22 +1,24 @@
 import 'dart:io';
 
-import 'package:image/image.dart';
+import 'package:image/image.dart' as img;
 
 import 'enums/supported_file_type.dart';
 
 class FileRead {
   File _file;
   String _name;
-  Image? _image;
+  img.Image? _image;
   final SupportedFileType _sft;
   final int _size;
   final String _extension;
+  String? _ocrText; // OCR 텍스트를 저장할 필드 추가
+
   FileRead(this._file, this._name, this._image, this._size, this._extension)
       : _sft = SupportedFileTypeExtension.fromString(_extension);
 
-  Image? getImage() => _image;
+  img.Image? getImage() => _image;
 
-  void setImage(Image? image) => _image = image;
+  void setImage(img.Image? image) => _image = image;
 
   File getFile() => _file;
 
@@ -38,8 +40,22 @@ class FileRead {
 
   SupportedFileType getExtensionType() => _sft;
 
+  // OCR 텍스트를 설정하는 메서드
+  void setOcrText(String ocrText) => _ocrText = ocrText;
+
+  // OCR 텍스트를 가져오는 메서드
+  String? getOcrText() => _ocrText;
+
+  // 파일로부터 OCR 텍스트를 복구하는 메서드 (추가)
+  void loadOcrText() {
+    final ocrFilePath = '${_file.path}.ocr.txt';
+    if (File(ocrFilePath).existsSync()) {
+      _ocrText = File(ocrFilePath).readAsStringSync();
+    }
+  }
+
   @override
   String toString() {
-    return "File: $_file, size: ${getSize()}, name: $_name, extension: ${getExtensionType().name}, image-width: ${getImage()?.width}, image-height: ${getImage()?.height}";
+    return "File: $_file, size: ${getSize()}, name: $_name, extension: ${getExtensionType().name}, image-width: ${getImage()?.width}, image-height: ${getImage()?.height}, ocrText: $_ocrText";
   }
 }

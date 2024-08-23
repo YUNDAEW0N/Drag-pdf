@@ -1,5 +1,6 @@
 import 'package:drag_pdf/common/colors/colors_app.dart';
 import 'package:drag_pdf/common/localization/localization.dart';
+import 'package:drag_pdf/helper/file_manager.dart';
 import 'package:drag_pdf/helper/firebase_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -12,6 +13,11 @@ Future<void> initializeApp() async {
   await loadSecureInf();
   await loadFirebase();
   await prepareApp();
+
+// FileManager 인스턴스 생성 및 폴더 파일 카운트 초기화
+  FileHelper fileHelper = AppSession.singleton.fileHelper;
+  FileManager fileManager = FileManager(fileHelper);
+  fileManager.initializeFolderFileCounts();
 }
 
 Future loadSecureInf() async {

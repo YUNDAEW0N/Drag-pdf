@@ -267,7 +267,7 @@ class FileManager {
         requests: [
           AnnotateImageRequest(
             image: Image(content: base64Encode(image)),
-            features: [Feature(type: ' DOCUMENT_TEXT_DETECTION')],
+            features: [Feature(type: 'DOCUMENT_TEXT_DETECTION')],
           ),
         ],
       );

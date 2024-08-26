@@ -370,7 +370,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
                         ),
                       ),
                       subtitle: Text(
-                        '폴더 번호: $folderName',
+                        '박스 번호: $folderName',
                         style: TextStyle(
                           fontSize: 14,
                           color: Colors.grey[600],

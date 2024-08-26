@@ -1,6 +1,5 @@
 import 'package:drag_pdf/model/file_read.dart';
 import 'package:flutter/material.dart';
-import 'dart:io';
 
 class DocumentViewerScreen extends StatefulWidget {
   final FileRead fileRead;
@@ -20,7 +19,6 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
   void initState() {
     super.initState();
     final ocrText = widget.fileRead.getOcrText();
-    print('OCR 결과: $ocrText'); // 디버깅용 출력
     _controller.text = ocrText ?? '';
   }
 
@@ -36,6 +34,8 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
         widget.fileRead.setOcrText(_controller.text);
         _toggleEditing();
       });
+      // 여기서 Navigator.pop을 호출할 때 수정된 fileRead 객체를 함께 반환합니다.
+      Navigator.pop(context, widget.fileRead);
     }
   }
 

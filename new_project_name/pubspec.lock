@@ -124,10 +124,9 @@ packages:
   cunning_document_scanner:
     dependency: "direct main"
     description:
-      name: cunning_document_scanner
-      sha256: bf590e8c8c8a4903ba7873c4f22b67e976604853f11065f594cb19b408bd25ef
-      url: "https://pub.dev"
-    source: hosted
+      path: "../cunning_document_scanner-master"
+      relative: true
+    source: path
     version: "1.2.3"
   cupertino_icons:
     dependency: "direct main"

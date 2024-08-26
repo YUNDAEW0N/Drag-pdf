@@ -24,10 +24,11 @@ class FolderFilesScreen extends StatelessWidget {
             ),
             child: ListTile(
               contentPadding: const EdgeInsets.all(8.0),
-              leading: Icon(
-                Icons.insert_drive_file,
-                color: Colors.blueAccent,
-                size: 40.0,
+              leading: Image.asset(
+                'assets/images/files/jpg_file.png',
+                width: 40.0,
+                height: 40.0,
+                fit: BoxFit.cover,
               ),
               title: Text(
                 file.getName(),
@@ -36,23 +37,30 @@ class FolderFilesScreen extends StatelessWidget {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              subtitle: Text(
-                'Size: ${(file.getFile().lengthSync() / 1024).toStringAsFixed(2)} KB',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
+              subtitle:
+                  file.getOcrText() != null && file.getOcrText()!.isNotEmpty
+                      ? Text(
+                          '계좌 번호: ${file.getOcrText()}',
+                          style: TextStyle(color: Colors.grey[600]),
+                        )
+                      : null,
               trailing: Icon(
                 Icons.arrow_forward_ios,
                 color: Colors.grey[400],
                 size: 20.0,
               ),
-              onTap: () {
-                print('Selected OCR Text: ${file.getOcrText()}'); // 디버깅용 출력
-                Navigator.push(
+              onTap: () async {
+                final updatedFile = await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => DocumentViewerScreen(fileRead: file),
                   ),
                 );
+
+                if (updatedFile != null) {
+                  files[index] = updatedFile;
+                  (context as Element).markNeedsBuild();
+                }
               },
             ),
           );

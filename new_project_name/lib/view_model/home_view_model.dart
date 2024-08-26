@@ -2,12 +2,10 @@ import 'package:drag_pdf/helper/file_manager.dart';
 import 'package:drag_pdf/helper/helpers.dart';
 import 'package:drag_pdf/model/enums/supported_file_type.dart';
 import 'package:drag_pdf/model/file_read.dart';
-import 'package:drag_pdf/view/mobile/document_screen_mobile.dart';
 import 'package:drag_pdf/view/mobile/folder_screen_mobile.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:convert';
 
 class HomeViewModel {
   final FileManager _mfl = AppSession.singleton.mfl;

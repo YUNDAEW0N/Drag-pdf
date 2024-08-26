@@ -1,18 +1,22 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:image/image.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:drag_pdf/helper/file_helper.dart';
 import 'package:drag_pdf/helper/pdf_helper.dart';
 import 'package:drag_pdf/model/file_read.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
+
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
+
+import 'dart:convert';
+import 'package:googleapis_auth/auth_io.dart';
+import 'package:googleapis/vision/v1.dart';
 
 import '../model/enums/supported_file_type.dart';
 
@@ -22,6 +26,8 @@ class FileManager {
 
   // OCR 인식을 위한 TextRecognizer 객체
   final textRecognizer = TextRecognizer();
+
+  final _scopes = [VisionApi.cloudPlatformScope];
 
   FileManager(this.fileHelper);
 
@@ -78,7 +84,7 @@ class FileManager {
       final file = files[i];
       final FileRead fileRead;
       final bytes = await file.readAsBytes();
-      Image? image = decodeNamedImage(file.name, bytes);
+      img.Image? image = img.decodeNamedImage(file.name, bytes);
       final size = await file.length();
       final format = FileHelper.singleton.getFormatOfFile(file.path);
       fileRead = FileRead(File(file.path), names[i], image, size, format);
@@ -167,47 +173,38 @@ class FileManager {
     FileRead? fileRead;
     List<String>? paths = await CunningDocumentScanner.getPictures();
     if (paths != null && paths.isNotEmpty) {
-      // 바코드 번호를 폴더 이름으로 사용
       final folderPath = path.join(fileHelper.localPath, qrCode);
       final folder = Directory(folderPath);
 
-      // 폴더가 없으면 생성
       if (!folder.existsSync()) {
         folder.createSync(recursive: true);
-        // 새 폴더일 경우 카운트를 1로 초기화
         folderFileCounts[qrCode] = 1;
       } else {
-        // 기존 폴더일 경우 카운트를 가져옴
         folderFileCounts[qrCode] ??= 1;
       }
 
-      for (String imgpath in paths) {
-        // OCR 인식
-        String ocrText = await _performOCR(imgpath);
+      for (String imgPath in paths) {
+        // Google Cloud Vision API를 사용한 OCR 인식
+        String ocrText = await performGoogleCloudOcr(imgPath);
 
-        // 이미지 파일을 불러오기
-        final image = decodeImage(File(imgpath).readAsBytesSync());
+        final image = img.decodeImage(File(imgPath).readAsBytesSync());
 
         if (image != null) {
-          // 파일 이름을 "바코드번호-카운트.jpg" 형식으로 설정
           final fileName = "$qrCode-${folderFileCounts[qrCode]}.jpg";
           final outputFilePath = path.join(folderPath, fileName);
 
-          // JPG 파일로 저장
-          File(outputFilePath).writeAsBytesSync(encodeJpg(image));
+          File(outputFilePath).writeAsBytesSync(img.encodeJpg(image));
 
           final file = File(outputFilePath);
           final size = await file.length();
           fileRead = FileRead(file, fileName, image, size, "jpg");
-          fileRead.setOcrText(ocrText); // OCR 텍스트 설정
+          fileRead.setOcrText(ocrText);
 
-          // OCR 텍스트를 파일로 저장
           File('${outputFilePath}.ocr.txt').writeAsStringSync(ocrText);
 
           print('SCANDOCUMENT: $ocrText');
           _addSingleFile(fileRead, folderPath);
 
-          // 다음 파일을 위해 카운터 증가
           folderFileCounts[qrCode] = folderFileCounts[qrCode]! + 1;
         }
       }
@@ -223,7 +220,7 @@ class FileManager {
     if (folder.existsSync()) {
       for (var file in folder.listSync()) {
         if (file is File && file.path.endsWith('.jpg')) {
-          final image = decodeImage(file.readAsBytesSync());
+          final image = img.decodeImage(file.readAsBytesSync());
           final size = file.lengthSync();
           final fileRead = FileRead(file, path.basename(file.path), image, size,
               path.extension(file.path).substring(1));
@@ -254,92 +251,54 @@ class FileManager {
     return folders;
   }
 
-  final Map<String, String> replacements = {
-    'A': '4', 'a': '4', 'B': '8', 'b': '6', //
-    'C': '0', 'c': '0', 'D': '0', 'd': '0', //
-    'E': '3', 'e': '3', 'F': '7', 'f': '7', //
-    'G': '6', 'g': '6', 'h': '6', 'H': '4', //
-    'I': '1', 'i': '1', 'l': '1', 'L': '1', //
-    '|': '1', '/': '1', 'J': '1', 'j': '1', //
-    'K': '1', 'k': '1', 'M': '4', 'm': '4', //
-    'N': '7', 'n': '7', 'O': '0', 'o': '0', //
-    'P': '9', 'p': '9', 'Q': '0', 'q': '9', //
-    'R': '2', 'r': '2', 'S': '5', 's': '5', //
-    'T': '7', 't': '7', 'U': '0', 'u': '0', //
-    'V': '7', 'v': '7', 'W': '3', 'w': '3', //
-    'X': '8', 'x': '8', 'Y': '4', 'y': '4', //
-    'Z': '2', 'z': '2', ' ': '', '[': '1', //
-  };
+  // Google Cloud Vision API를 사용한 OCR 메서드
+  Future<String> performGoogleCloudOcr(String imagePath) async {
+    try {
+      // rootBundle을 사용하여 JSON 파일 읽기
+      String jsonString = await rootBundle
+          .loadString('assets/algebraic-envoy-433701-k5-bfaaa577ad0a.json');
+      var credentials = ServiceAccountCredentials.fromJson(jsonString);
+      var client = await clientViaServiceAccount(credentials, _scopes);
 
-  // 후처리 메서드
-  String _replaceCharacters(String input) {
-    StringBuffer replacedText = StringBuffer();
+      var vision = VisionApi(client);
+      var image = await File(imagePath).readAsBytes();
 
-    for (int i = 0; i < input.length; i++) {
-      String char = input[i];
-      // replacements 맵에서 해당 문자를 찾고, 없으면 그대로 추가
-      replacedText.write(replacements[char] ?? char);
-    }
+      var request = BatchAnnotateImagesRequest(
+        requests: [
+          AnnotateImageRequest(
+            image: Image(content: base64Encode(image)),
+            features: [Feature(type: ' DOCUMENT_TEXT_DETECTION')],
+          ),
+        ],
+      );
 
-    return replacedText.toString();
-  }
+      var response = await vision.images.annotate(request);
 
-  // OCR 인식을 수행하는 메서드
-  // Future<String> _performOCR(String imagePath) async {
-  //   final inputImage = InputImage.fromFilePath(imagePath);
-  //   final recognizedText = await textRecognizer.processImage(inputImage);
-
-  //   StringBuffer ocrText = StringBuffer();
-
-  //   for (TextBlock block in recognizedText.blocks) {
-  //     for (TextLine line in block.lines) {
-  //       ocrText.writeln(line.text);
-  //     }
-  //   }
-
-  //   String ocrResult = ocrText.toString().trim();
-
-  //   print("변환 전 OCR 결과: $ocrResult");
-
-  //   // 후처리로 텍스트 변환
-  //   String finalResult = _replaceCharacters(ocrResult);
-
-  //   print("최종 OCR 결과: $finalResult");
-  //   return finalResult;
-  // }
-
-  Future<String> _performOCR(String imagePath) async {
-    final inputImage = InputImage.fromFilePath(imagePath);
-    final recognizedText = await textRecognizer.processImage(inputImage);
-
-    StringBuffer ocrText = StringBuffer();
-
-    for (TextBlock block in recognizedText.blocks) {
-      for (TextLine line in block.lines) {
-        ocrText.writeln(line.text);
+      if (response.responses!.isEmpty) {
+        throw Exception('Empty response from Vision API');
       }
+
+      // OCR 결과 텍스트 추출
+      String ocrResult =
+          response.responses!.first.textAnnotations?.first.description ??
+              '추출할 텍스트가 없습니다.';
+
+      // 숫자 4자리-숫자 4자리-숫자 4자리 패턴 추출
+      final regex = RegExp(r'\b\d{4}-\d{4}-\d{4}\b');
+      final matches =
+          regex.allMatches(ocrResult).map((match) => match.group(0)).join('\n');
+
+      client.close();
+
+      // 패턴이 존재하지 않는 경우의 메시지 설정
+      return matches.isNotEmpty ? matches : '4-4-4 패턴이 없습니다.';
+    } catch (e) {
+      print('Google Cloud OCR 에러 발생: $e');
+      return 'Error performing OCR';
     }
-
-    String ocrResult = ocrText.toString().trim();
-
-    print("변환 전 OCR 결과: $ocrResult");
-
-    // 후처리로 텍스트 변환
-    String processedText = _replaceCharacters(ocrResult);
-
-    // 정규식을 사용하여 숫자 4자리-숫자 4자리-숫자 4자리 패턴만 추출
-    final regex = RegExp(r'\b\d{4}-\d{4}-\d{4}\b');
-    final matches = regex
-        .allMatches(processedText)
-        .map((match) => match.group(0))
-        .join('\n');
-
-    String finalResult =
-        matches.isNotEmpty ? matches : "No valid pattern found";
-
-    print("최종 OCR 결과: $finalResult");
-    return finalResult;
   }
+
+  //--------------------------------------------------------------------------------------
 
   void initializeFolderFileCounts() {
     final directory = Directory(fileHelper.localPath);

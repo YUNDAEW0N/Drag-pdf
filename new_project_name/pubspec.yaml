@@ -63,6 +63,8 @@ dependencies:
   google_mlkit_text_recognition: ^0.13.0
   tflite: ^1.1.2
   flutter_tesseract_ocr: ^0.4.26
+  googleapis: ^13.2.0
+  googleapis_auth: ^1.6.0
 
 flutter_icons:
   image_path_android: "assets/icons/android-icon.png"
@@ -103,5 +105,4 @@ flutter:
     - assets/images/
     - assets/images/files/
     - assets/icons/
-    - assets/mnist_model.tflite
-    - assets/labels.txt
+    - assets/algebraic-envoy-433701-k5-bfaaa577ad0a.json

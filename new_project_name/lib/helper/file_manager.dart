@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:file_picker/file_picker.dart';
@@ -24,8 +23,6 @@ class FileManager {
   final List<FileRead> _filesInMemory = [];
   final FileHelper fileHelper;
 
-  // OCR 인식을 위한 TextRecognizer 객체
-  final textRecognizer = TextRecognizer();
 
   final _scopes = [VisionApi.cloudPlatformScope];
 

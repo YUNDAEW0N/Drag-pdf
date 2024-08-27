@@ -354,14 +354,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.10+1"
-  flutter_tesseract_ocr:
-    dependency: "direct main"
-    description:
-      name: flutter_tesseract_ocr
-      sha256: c3af11e3a8803b36bd24f7ec8ff3e0e21168dac917407357ae177ddf9fe10180
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.4.26"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -396,22 +388,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.1+4"
-  google_mlkit_commons:
-    dependency: transitive
-    description:
-      name: google_mlkit_commons
-      sha256: "27d626c66a181351a953eba5b6ff1ff123aadb891b4dab085b292118f039d6ac"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.7.1"
-  google_mlkit_text_recognition:
-    dependency: "direct main"
-    description:
-      name: google_mlkit_text_recognition
-      sha256: "89c848329355f165ff17ca8645cab5998770e9e25e431fe6dd8261ed9cf7bdc4"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.13.0"
   googleapis:
     dependency: "direct main"
     description:
@@ -913,14 +889,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.2"
-  tflite:
-    dependency: "direct main"
-    description:
-      name: tflite
-      sha256: "661f8942a0e8ca05fedf554cc6f9cc95f526d0e4588d1665e0eb4d29e25e69b1"
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.2"
   typed_data:
     dependency: transitive
     description:

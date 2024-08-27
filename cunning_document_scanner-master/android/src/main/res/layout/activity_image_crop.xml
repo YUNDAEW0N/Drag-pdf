@@ -6,19 +6,12 @@
     android:background="@color/black"
     tools:context=".fallback.DocumentScannerActivity">
 
-    <!-- 이미지 크롭 뷰 -->
-    <biz.cunning.cunning_document_scanner.fallback.ui.ImageCropView
-        android:id="@+id/image_view"
-        android:layout_width="match_parent"
-        android:layout_height="@dimen/image_crop_view_initial_height"
-        android:contentDescription="@string/image_with_cropper" />
-
     <!-- OCR 결과를 표시할 EditText -->
     <EditText
         android:id="@+id/ocr_result_edit_text"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/image_view"
+        android:layout_alignParentTop="true"
         android:layout_marginTop="16dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="16dp"
@@ -29,12 +22,20 @@
         android:textColor="@android:color/black"
         android:visibility="visible" /> <!-- 가시성 visible로 설정 -->
 
+    <!-- 이미지 크롭 뷰 -->
+    <biz.cunning.cunning_document_scanner.fallback.ui.ImageCropView
+        android:id="@+id/image_view"
+        android:layout_width="match_parent"
+        android:layout_height="300dp" 
+        android:layout_below="@id/ocr_result_edit_text"
+        android:contentDescription="@string/image_with_cropper" />
+
     <!-- 하단의 버튼들 -->
     <LinearLayout
         android:paddingHorizontal="@dimen/buttons_container_horizontal_padding"
         android:paddingBottom="@dimen/buttons_container_bottom_padding"
         android:baselineAligned="false"
-        android:layout_below="@id/ocr_result_edit_text"
+        android:layout_below="@id/image_view"
         android:layout_alignParentBottom="true"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

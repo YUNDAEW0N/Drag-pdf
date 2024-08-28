@@ -47,10 +47,11 @@ class FileRead {
   String? getOcrText() => _ocrText;
 
   // 파일로부터 OCR 텍스트를 복구하는 메서드 (추가)
-  void loadOcrText() {
+  Future<void> loadOcrTextAsync() async {
     final ocrFilePath = '${_file.path}.ocr.txt';
-    if (File(ocrFilePath).existsSync()) {
-      _ocrText = File(ocrFilePath).readAsStringSync();
+    if (await File(ocrFilePath).exists()) {
+      // 비동기로 파일 존재 여부 확인
+      _ocrText = await File(ocrFilePath).readAsString(); // 비동기로 파일 읽기
     }
   }
 

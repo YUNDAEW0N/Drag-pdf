@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter/services.dart';
-
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image/image.dart' as img;
@@ -9,21 +8,16 @@ import 'package:image_picker/image_picker.dart';
 import 'package:drag_pdf/helper/file_helper.dart';
 import 'package:drag_pdf/helper/pdf_helper.dart';
 import 'package:drag_pdf/model/file_read.dart';
-
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
-
 import 'dart:convert';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:googleapis/vision/v1.dart';
-
 import '../model/enums/supported_file_type.dart';
 
 class FileManager {
   final List<FileRead> _filesInMemory = [];
   final FileHelper fileHelper;
-
-
   final _scopes = [VisionApi.cloudPlatformScope];
 
   FileManager(this.fileHelper);
@@ -180,9 +174,22 @@ class FileManager {
         folderFileCounts[qrCode] ??= 1;
       }
 
-      for (String imgPath in paths) {
-        // Google Cloud Vision API를 사용한 OCR 인식
-        String ocrText = await performGoogleCloudOcr(imgPath);
+      // OCR 처리 시작 시간 기록
+      final startTime = DateTime.now();
+      print('전체 OCR 처리 시작: $startTime');
+
+      // Google Cloud Vision API를 사용하여 한 번에 여러 이미지를 처리
+      List<String> ocrResults = await performGoogleCloudOcrBatch(paths);
+
+      // OCR 처리 종료 시간 기록
+      final endTime = DateTime.now();
+      final duration = endTime.difference(startTime);
+      print('전체 OCR 처리 종료: $endTime, 소요 시간: ${duration.inMilliseconds}ms');
+
+      // OCR 결과를 각 이미지와 함께 저장
+      for (int i = 0; i < paths.length; i++) {
+        String imgPath = paths[i];
+        String ocrText = ocrResults[i];
 
         final image = img.decodeImage(File(imgPath).readAsBytesSync());
 
@@ -194,41 +201,54 @@ class FileManager {
 
           final file = File(outputFilePath);
           final size = await file.length();
-          fileRead = FileRead(file, fileName, image, size, "jpg");
-          fileRead.setOcrText(ocrText);
+          final newFileRead = FileRead(file, fileName, image, size, "jpg");
+          newFileRead.setOcrText(ocrText);
 
           File('${outputFilePath}.ocr.txt').writeAsStringSync(ocrText);
 
           print('SCANDOCUMENT: $ocrText');
-          _addSingleFile(fileRead, folderPath);
+          _addSingleFile(newFileRead, folderPath);
 
           folderFileCounts[qrCode] = folderFileCounts[qrCode]! + 1;
+
+          if (fileRead == null) {
+            fileRead = newFileRead; // 첫 번째 파일을 반환하기 위해 설정
+          }
         }
       }
     }
     return fileRead;
   }
 
-  List<FileRead> loadFilesFromFolder(String folderName) {
+  Future<List<FileRead>> loadFilesFromFolder(String folderName) async {
     final folderPath = path.join(fileHelper.localPath, folderName);
     final folder = Directory(folderPath);
     final files = <FileRead>[];
 
     if (folder.existsSync()) {
-      for (var file in folder.listSync()) {
-        if (file is File && file.path.endsWith('.jpg')) {
-          final image = img.decodeImage(file.readAsBytesSync());
-          final size = file.lengthSync();
-          final fileRead = FileRead(file, path.basename(file.path), image, size,
-              path.extension(file.path).substring(1));
+      final fileList = folder.listSync();
 
-          // OCR 텍스트 복구
-          fileRead.loadOcrText();
+      for (var file in fileList) {
+        if (file is File && file.path.endsWith('.jpg')) {
+          final bytes = await file.readAsBytes(); // 비동기로 파일 읽기
+          final image = img.decodeImage(bytes); // 이미지 디코딩 (이 부분은 동기적)
+          final size = await file.length(); // 비동기로 파일 크기 가져오기
+          final fileRead = FileRead(
+            file,
+            path.basename(file.path),
+            image,
+            size,
+            path.extension(file.path).substring(1),
+          );
+
+          // OCR 텍스트 복구 (이것도 비동기로 수행)
+          await fileRead.loadOcrTextAsync(); // 비동기적으로 OCR 텍스트 읽기
 
           files.add(fileRead);
         }
       }
     }
+
     return files;
   }
 
@@ -249,7 +269,8 @@ class FileManager {
   }
 
   // Google Cloud Vision API를 사용한 OCR 메서드
-  Future<String> performGoogleCloudOcr(String imagePath) async {
+  Future<List<String>> performGoogleCloudOcrBatch(
+      List<String> imagePaths) async {
     try {
       // rootBundle을 사용하여 JSON 파일 읽기
       String jsonString = await rootBundle
@@ -258,44 +279,49 @@ class FileManager {
       var client = await clientViaServiceAccount(credentials, _scopes);
 
       var vision = VisionApi(client);
-      var image = await File(imagePath).readAsBytes();
 
-      var request = BatchAnnotateImagesRequest(
-        requests: [
-          AnnotateImageRequest(
-            image: Image(content: base64Encode(image)),
-            features: [Feature(type: 'DOCUMENT_TEXT_DETECTION')],
-          ),
-        ],
-      );
+      // 여러 이미지를 BatchAnnotateImagesRequest로 처리
+      List<AnnotateImageRequest> requests = [];
+      for (var imagePath in imagePaths) {
+        var imageBytes = await File(imagePath).readAsBytes();
+        var request = AnnotateImageRequest(
+          image: Image(content: base64Encode(imageBytes)),
+          features: [Feature(type: 'DOCUMENT_TEXT_DETECTION')],
+        );
+        requests.add(request);
+      }
 
-      var response = await vision.images.annotate(request);
+      var batchRequest = BatchAnnotateImagesRequest(requests: requests);
+      var response = await vision.images.annotate(batchRequest);
 
       if (response.responses!.isEmpty) {
         throw Exception('Empty response from Vision API');
       }
 
-      // OCR 결과 텍스트 추출
-      String ocrResult =
-          response.responses!.first.textAnnotations?.first.description ??
-              '추출할 텍스트가 없습니다.';
+      // 모든 이미지에 대한 OCR 결과를 저장할 리스트
+      List<String> ocrResults = [];
 
-      // 숫자 4자리-숫자 4자리-숫자 4자리 패턴 추출
-      final regex = RegExp(r'\b\d{4}-\d{4}-\d{4}\b');
-      final matches =
-          regex.allMatches(ocrResult).map((match) => match.group(0)).join('\n');
+      for (var res in response.responses!) {
+        String ocrResult =
+            res.textAnnotations?.first.description ?? '추출할 텍스트가 없습니다.';
+
+        // 숫자 4자리-숫자 4자리-숫자 4자리 패턴 추출
+        final regex = RegExp(r'\b\d{4}-\d{4}-\d{4}\b');
+        final matches = regex
+            .allMatches(ocrResult)
+            .map((match) => match.group(0))
+            .join('\n');
+        ocrResults.add(matches.isNotEmpty ? matches : '4-4-4 패턴이 없습니다.');
+      }
 
       client.close();
 
-      // 패턴이 존재하지 않는 경우의 메시지 설정
-      return matches.isNotEmpty ? matches : '4-4-4 패턴이 없습니다.';
+      return ocrResults;
     } catch (e) {
       print('Google Cloud OCR 에러 발생: $e');
-      return 'Error performing OCR';
+      return List.filled(imagePaths.length, 'Error performing OCR');
     }
   }
-
-  //--------------------------------------------------------------------------------------
 
   void initializeFolderFileCounts() {
     final directory = Directory(fileHelper.localPath);

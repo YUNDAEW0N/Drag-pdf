@@ -96,7 +96,7 @@ class HomeViewModel {
   }
 
   Future<void> openFolder(String folderName, BuildContext context) async {
-    final files = _mfl.loadFilesFromFolder(folderName);
+    final files = await _mfl.loadFilesFromFolder(folderName); // 비동기 파일 로드
     if (files.isNotEmpty) {
       Navigator.push(
         context,

@@ -73,7 +73,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
 
   Future<void> loadFilesOrImages(LoaderOf from) async {
     setState(() {
-      Loading.show();
+      // Loading.show();
     });
     try {
       switch (from) {
@@ -98,7 +98,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
           buttonTextLocalized: 'accept');
     } finally {
       setState(() {
-        Loading.hide();
+        // Loading.hide();
         Utils.printInDebug(viewModel.getMergeableFilesList());
       });
     }
@@ -286,13 +286,18 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
 
   Future<void> _navigateToDocumentScanner(
       BuildContext context, String title) async {
-    final fileRead = await viewModel.scanDocument(title);
-    if (fileRead != null) {
-      // 폴더 목록 화면을 새로고침하거나 이동
-      setState(() {
-        // 폴더 목록 화면으로 돌아가 폴더를 선택할 수 있게 함
-        viewModel.getFolderNames();
-      });
+    Loading.show(context); // 로딩 화면 표시
+
+    try {
+      final fileRead = await viewModel.scanDocument(title); // scanDocument 실행
+      if (fileRead != null) {
+        // 폴더 목록 화면을 새로고침하거나 이동
+        setState(() {
+          viewModel.getFolderNames(); // 폴더 목록 갱신
+        });
+      }
+    } finally {
+      Loading.hide(); // 작업이 완료되면 로딩 화면 숨기기
     }
   }
 

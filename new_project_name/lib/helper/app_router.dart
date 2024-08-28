@@ -50,10 +50,10 @@ class AppRouter {
                     PDFViewerScreen(file: state.extra as FileRead),
               ),
             ]),
-        GoRoute(
-          path: '/loading',
-          builder: (context, state) => const LoadingScreen(),
-        ),
+        // GoRoute(
+        //   path: '/loading',
+        //   builder: (context, state) => const LoadingScreen(),
+        // ),
       ],
     );
   }
@@ -87,10 +87,10 @@ class AppRouter {
                     PDFViewerScreen(file: state.extra as FileRead),
               ),
             ]),
-        GoRoute(
-          path: '/loading',
-          builder: (context, state) => const LoadingScreen(),
-        ),
+        // GoRoute(
+        //   path: '/loading',
+        //   builder: (context, state) => const LoadingScreen(),
+        // ),
       ],
     );
   }

@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:drag_pdf/api/fileupload.dart';
 import 'package:flutter/services.dart';
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
 import 'package:file_picker/file_picker.dart';
@@ -14,8 +15,10 @@ import 'dart:convert';
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:googleapis/vision/v1.dart';
 import '../model/enums/supported_file_type.dart';
+import 'package:intl/intl.dart';
 
 class FileManager {
+  final FileUploader fileUploader = FileUploader(); // FileUploader 인스턴스 생성
   final List<FileRead> _filesInMemory = [];
   final FileHelper fileHelper;
   final _scopes = [VisionApi.cloudPlatformScope];
@@ -93,40 +96,77 @@ class FileManager {
     // _uploadFileToServer(localFile.getFile());
   }
 
-  //서버 전송 메서드 추가
+  //서버 전송 메서드 및 파일 저장 메서드 추가
   /*-------------------------------------------------------------------------------- */
-  Future<void> _uploadFileToServer(File file) async {
-    final uri = Uri.parse('http://3.35.204.106:8080/upload');
-
+  Future<void> uploadFolderImagesToServer(
+      String folderName, String scannedBarcode) async {
     try {
-      print('파일 전송 시작: ${path.basename(file.path)}');
+      // 폴더 내의 파일을 모두 로드
+      final files = await loadFilesFromFolder(folderName);
 
-      String fileName = path.basename(file.path);
+      // 현재 날짜를 YYYYMMDD 형식으로 포맷
+      String currentDate = DateFormat('yyyyMMdd').format(DateTime.now());
 
-      if (!fileName.contains('.')) {
-        fileName = '$fileName.jpeg';
+      // 서버로 전송할 파일 정보 구성
+      Map<String, Map<String, String>> fileInfo = {};
+      List<String> filePaths = [];
+      int fileCounter = 1;
+
+      for (var file in files) {
+        // 파일명 생성: 오늘날짜 + 지점코드 + 4자리 카운터
+        String fileName =
+            '$currentDate${'000'}${fileCounter.toString().padLeft(4, '0')}.jpg';
+
+        // OCR 결과를 docNo로 사용
+        String docNo = file.getOcrText()?.replaceAll('-', '') ?? 'OCR 결과 없음';
+
+        // 파일 정보 구성
+        fileInfo[fileName] = {'docNo': docNo};
+
+        // 파일 경로를 지정하고 파일을 저장
+        // 수정된 코드
+        var newFilePath =
+            path.join(path.dirname(file.getFile().path), fileName);
+        var newFile = await file.getFile().copy(newFilePath);
+        file.getFile().deleteSync(); // 복사 후 원본 파일 삭제
+
+        // OCR 파일의 경로도 새 파일명으로 변경
+        var ocrFilePath = '${file.getFile().path}.ocr.txt';
+        var newOcrFilePath = '$newFilePath.ocr.txt';
+        if (File(ocrFilePath).existsSync()) {
+          await File(ocrFilePath).rename(newOcrFilePath);
+        }
+
+        // fileRead 객체의 이름도 새 파일명으로 업데이트
+        file.setFile(newFile);
+        file.setName(fileName);
+
+        fileCounter++;
       }
-      print('전송할 파일 이름: $fileName');
 
-      final request = http.MultipartRequest('POST', uri)
-        ..files.add(http.MultipartFile(
-          'uploadFile',
-          file.readAsBytes().asStream(),
-          await file.length(),
-          filename: fileName,
-        ));
+      // boxInfo JSON 생성
+      final boxInfo = {
+        'affCd': 'SHB', // 실제 고객사 코드를 입력
+        'brCd': '000', // 실제 지점 코드를 입력
+        'baseDt': currentDate, // 기준 일자를 YYYYMMDD 형식으로 입력
+        'fstRegId': 'superadmin', // 실제 최초 등록자 ID를 입력
+        'lstChgId': 'superadmin', // 실제 최종 변경자 ID를 입력
+      };
 
-      final response = await request.send();
-      print('서버 응답 상태 코드: ${response.statusCode}');
-      if (response.statusCode == 200) {
-        print('업로드 성공');
-      } else {
-        print('업로드 실패: ${response.statusCode}');
-      }
+      // 서버로 파일 전송
+      await fileUploader.uploadFiles(
+        scannedBarcode, // 스캔한 바코드 번호를 shipBoxNo로 사용
+        boxInfo,
+        fileInfo,
+        filePaths,
+      );
+
+      print('모든 파일이 서버로 전송되었습니다.');
     } catch (e) {
-      print('에러 발생: $e');
+      print('파일 업로드 중 오류 발생: $e');
     }
   }
+
   /*-------------------------------------------------------------------------------- */
 
   void addFilesInMemory(List<FileRead> files) {
@@ -174,36 +214,26 @@ class FileManager {
         folderFileCounts[qrCode] ??= 1;
       }
 
-      // OCR 처리 시작 시간 기록
-      final startTime = DateTime.now();
-      print('전체 OCR 처리 시작: $startTime');
-
-      // Google Cloud Vision API를 사용하여 한 번에 여러 이미지를 처리
-      List<String> ocrResults = await performGoogleCloudOcrBatch(paths);
-
-      // OCR 처리 종료 시간 기록
-      final endTime = DateTime.now();
-      final duration = endTime.difference(startTime);
-      print('전체 OCR 처리 종료: $endTime, 소요 시간: ${duration.inMilliseconds}ms');
-
-      // OCR 결과를 각 이미지와 함께 저장
       for (int i = 0; i < paths.length; i++) {
         String imgPath = paths[i];
-        String ocrText = ocrResults[i];
 
         final image = img.decodeImage(File(imgPath).readAsBytesSync());
 
         if (image != null) {
-          final fileName = "$qrCode-${folderFileCounts[qrCode]}.jpg";
+          final fileName = "$qrCode${folderFileCounts[qrCode]}.jpg";
           final outputFilePath = path.join(folderPath, fileName);
 
+          // 파일을 폴더 안에만 저장
           File(outputFilePath).writeAsBytesSync(img.encodeJpg(image));
 
           final file = File(outputFilePath);
           final size = await file.length();
           final newFileRead = FileRead(file, fileName, image, size, "jpg");
-          newFileRead.setOcrText(ocrText);
 
+          // OCR 텍스트 저장
+          String ocrText = await performGoogleCloudOcrBatch([imgPath])
+              .then((res) => res.isNotEmpty ? res[0] : 'OCR 결과 없음');
+          newFileRead.setOcrText(ocrText);
           File('${outputFilePath}.ocr.txt').writeAsStringSync(ocrText);
 
           print('SCANDOCUMENT: $ocrText');
@@ -367,6 +397,18 @@ class FileManager {
     FileRead fileRead = await PDFHelper.mergePdfDocuments(
         intermediateFiles, outputPath, nameOutputFile);
     return fileRead;
+  }
+
+  Future<void> loadSavedFiles() async {
+    try {
+      final folderNames = loadFolderNames();
+      for (var folderName in folderNames) {
+        final files = await loadFilesFromFolder(folderName);
+        addFilesInMemory(files);
+      }
+    } catch (e) {
+      print('파일 로드 중 오류 발생: $e');
+    }
   }
 
   @override

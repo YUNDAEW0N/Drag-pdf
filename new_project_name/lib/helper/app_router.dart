@@ -1,4 +1,5 @@
 import 'package:drag_pdf/helper/helpers.dart';
+import 'package:drag_pdf/view/mobile/login_screen.dart';
 import 'package:drag_pdf/model/file_read.dart';
 import 'package:drag_pdf/view/create_signature_screen.dart';
 import 'package:go_router/go_router.dart';
@@ -30,8 +31,13 @@ class AppRouter {
           builder: (context, state) => const SplashScreenMobile(),
         ),
         GoRoute(
-            path: '/home',
-            builder: (context, state) => const HomeScreenMobile(),
+          path: '/login',
+          builder: (context, state) => const LoginScreen(), // 로그인 화면 추가
+        ),
+        GoRoute(
+            path: '/home_screen_mobile',
+            builder: (context, state) =>
+                const HomeScreenMobile(), // HomeScreenMobile으로 경로 수정
             routes: [
               GoRoute(
                   path: 'preview_document_screen',
@@ -50,10 +56,6 @@ class AppRouter {
                     PDFViewerScreen(file: state.extra as FileRead),
               ),
             ]),
-        // GoRoute(
-        //   path: '/loading',
-        //   builder: (context, state) => const LoadingScreen(),
-        // ),
       ],
     );
   }

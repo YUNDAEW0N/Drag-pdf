@@ -1,3 +1,4 @@
+import 'package:drag_pdf/helper/file_manager.dart';
 import 'package:drag_pdf/view/mobile/document_screen_mobile.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 
@@ -7,6 +8,7 @@ import 'package:drag_pdf/common/colors/colors_app.dart';
 import 'package:drag_pdf/common/localization/localization.dart';
 import 'package:drag_pdf/components/components.dart';
 import 'package:drag_pdf/model/enums/loader_of.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 import '../../helper/dialogs/custom_dialog.dart';
 import '../../helper/helpers.dart';
@@ -22,6 +24,8 @@ class HomeScreenMobile extends StatefulWidget {
 class _HomeScreenMobileState extends State<HomeScreenMobile>
     with WidgetsBindingObserver {
   final HomeViewModel viewModel = HomeViewModel();
+  final FileManager _mfl = AppSession.singleton.mfl;
+  String? selectedFolderName;
 
   // QR or Barcode 스캔 관련 변수 추가
   //----------------------------------------------------------------------
@@ -349,49 +353,114 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
           ],
         ),
         body: folderNames.isNotEmpty
-            ? ListView.builder(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                itemCount: folderNames.length,
-                itemBuilder: (context, index) {
-                  final folderName = folderNames[index];
-                  return Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10.0),
-                    ),
-                    elevation: 4.0,
-                    child: ListTile(
-                      leading: const Icon(
-                        Icons.folder,
-                        color: ColorsApp.kMainColor,
-                        size: 40,
-                      ),
-                      title: Text(
-                        folderName,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: ColorsApp.kMainColor,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '박스 번호: $folderName',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      trailing: const Icon(
-                        Icons.arrow_forward_ios,
-                        color: ColorsApp.kMainColor,
-                        size: 20,
-                      ),
-                      onTap: () {
-                        viewModel.openFolder(folderName, context);
+            ? Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16.0, vertical: 8.0),
+                      itemCount: folderNames.length,
+                      itemBuilder: (context, index) {
+                        final folderName = folderNames[index];
+                        return Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10.0),
+                          ),
+                          elevation: 4.0,
+                          child: ListTile(
+                            leading: const Icon(
+                              Icons.folder,
+                              color: ColorsApp.kMainColor,
+                              size: 40,
+                            ),
+                            title: Text(
+                              folderName,
+                              style: const TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: ColorsApp.kMainColor,
+                              ),
+                            ),
+                            subtitle: Text(
+                              '박스 번호: $folderName',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                            trailing: const Icon(
+                              Icons.arrow_forward_ios,
+                              color: ColorsApp.kMainColor,
+                              size: 20,
+                            ),
+                            onTap: () {
+                              setState(() {
+                                selectedFolderName = folderName; // 선택된 폴더 이름 저장
+                              });
+                              viewModel.openFolder(folderName, context);
+                            },
+                          ),
+                        );
                       },
                     ),
-                  );
-                },
+                  ),
+                  // 추가된 서버 전송 버튼
+                  Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        if (scannedTitle.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('먼저 바코드나 QR 코드를 스캔하세요.')),
+                          );
+                          return;
+                        }
+
+                        if (selectedFolderName == null) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('서버로 전송할 폴더를 선택하세요.')),
+                          );
+                          return;
+                        }
+
+                        setState(() {
+                          Loading.show(context);
+                        });
+
+                        try {
+                          await _mfl.uploadFolderImagesToServer(
+                            selectedFolderName!, // 선택된 폴더의 이미지를 서버로 전송
+                            scannedTitle, // 스캔된 바코드나 QR 코드 번호를 shipBoxNo로 사용
+                          );
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                                content: Text('이미지들이 성공적으로 서버로 전송되었습니다.')),
+                          );
+                        } catch (error) {
+                          CustomDialog.showError(
+                            context: context,
+                            error: error,
+                            titleLocalized: '파일 전송 오류',
+                            subtitleLocalized: error.toString(),
+                            buttonTextLocalized: '확인',
+                          );
+                        } finally {
+                          setState(() {
+                            Loading.hide();
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.upload),
+                      label: const Text('서버로 전송'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 32, vertical: 16),
+                        textStyle: const TextStyle(fontSize: 18),
+                      ),
+                    ),
+                  ),
+                ],
               )
             : Center(
                 child: Column(
@@ -413,37 +482,6 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
                   ],
                 ),
               ),
-        // floatingActionButton: Visibility(
-        //   visible: folderNames.isNotEmpty,
-        //   child: FloatingActionButton(
-        //     onPressed: () async {
-        //       setState(() {
-        //         Loading.show();
-        //       });
-        //       try {
-        //         final file = await viewModel.generatePreviewPdfDocument();
-        //         setState(() {
-        //           Utils.openFileProperly(context, file);
-        //         });
-        //       } catch (error) {
-        //         if (!context.mounted) return;
-        //         CustomDialog.showError(
-        //           context: context,
-        //           error: error,
-        //           titleLocalized: 'generate_file_error_title',
-        //           subtitleLocalized: 'generate_file_error_subtitle',
-        //           buttonTextLocalized: 'accept',
-        //         );
-        //       } finally {
-        //         setState(() {
-        //           Loading.hide();
-        //         });
-        //       }
-        //     },
-        //     backgroundColor: ColorsApp.kMainColor,
-        //     child: const Icon(Icons.arrow_forward),
-        //   ),
-        // ),
       ),
     );
   }

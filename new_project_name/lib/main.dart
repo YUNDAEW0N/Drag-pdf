@@ -18,6 +18,12 @@ Future<void> initializeApp() async {
   FileHelper fileHelper = AppSession.singleton.fileHelper;
   FileManager fileManager = FileManager(fileHelper);
   fileManager.initializeFolderFileCounts();
+
+  // 폴더 파일 카운트 초기화 후 로컬에 저장된 파일 로드
+  await fileManager.loadSavedFiles();
+
+  // 앱 전체에서 사용할 수 있도록 FileManager 인스턴스를 AppSession에 저장
+  AppSession.singleton.mfl = fileManager;
 }
 
 Future loadSecureInf() async {
@@ -34,16 +40,18 @@ Future loadFirebase() async {
 
 Future prepareApp() async {
   await AppSession.singleton.fileHelper.loadLocalPath();
-  AppSession.singleton.fileHelper.emptyLocalDocumentFolder();
+  //AppSession.singleton.fileHelper.emptyLocalDocumentFolder();
 }
 
 void main() async {
   await initializeApp();
-  runApp(const MyApp());
+  runApp(MyApp(fileManager: AppSession.singleton.mfl));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final FileManager fileManager;
+
+  const MyApp({super.key, required this.fileManager});
 
   @override
   Widget build(BuildContext context) {

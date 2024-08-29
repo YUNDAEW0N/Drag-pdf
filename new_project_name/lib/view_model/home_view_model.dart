@@ -110,7 +110,7 @@ class HomeViewModel {
     } else {
       // 파일이 없는 경우에 대한 처리
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('폴더에 파일이 없습니다.')),
+        const SnackBar(content: Text('폴더에 파일이 없습니다.')),
       );
     }
   }

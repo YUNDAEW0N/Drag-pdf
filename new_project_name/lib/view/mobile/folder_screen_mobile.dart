@@ -1,6 +1,10 @@
+import 'package:drag_pdf/helper/file_manager.dart';
+import 'package:drag_pdf/helper/dialogs/custom_dialog.dart';
+import 'package:drag_pdf/helper/loading.dart';
+import 'package:flutter/material.dart';
 import 'package:drag_pdf/model/file_read.dart';
 import 'package:drag_pdf/view/mobile/document_screen_mobile.dart';
-import 'package:flutter/material.dart';
+import 'package:drag_pdf/helper/app_session.dart';
 
 class FolderFilesScreen extends StatelessWidget {
   final List<FileRead> files;
@@ -10,8 +14,21 @@ class FolderFilesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // AppSession에서 FileManager 인스턴스를 가져옴
+    final fileManager = AppSession.singleton.mfl;
+
     return Scaffold(
-      appBar: AppBar(title: Text(folderName)),
+      appBar: AppBar(
+        title: Text(folderName),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.upload),
+            onPressed: () async {
+              await _uploadFiles(context, fileManager);
+            },
+          ),
+        ],
+      ),
       body: ListView.builder(
         itemCount: files.length,
         itemBuilder: (context, index) {
@@ -67,5 +84,28 @@ class FolderFilesScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  Future<void> _uploadFiles(
+      BuildContext context, FileManager fileManager) async {
+    Loading.show(context);
+    try {
+      // 서버로 전송
+      await fileManager.uploadFolderImagesToServer(
+          folderName, folderName); // 여기에 적절한 바코드나 QR 코드 번호를 입력
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이미지들이 성공적으로 서버로 전송되었습니다.')),
+      );
+    } catch (error) {
+      CustomDialog.showError(
+        context: context,
+        error: error,
+        titleLocalized: '파일 전송 오류',
+        subtitleLocalized: error.toString(),
+        buttonTextLocalized: '확인',
+      );
+    } finally {
+      Loading.hide();
+    }
   }
 }

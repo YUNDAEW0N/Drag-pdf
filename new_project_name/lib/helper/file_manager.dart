@@ -23,6 +23,8 @@ class FileManager {
   final FileHelper fileHelper;
   final _scopes = [VisionApi.cloudPlatformScope];
 
+  final Map<String, bool> folderUploadStatus = {};
+
   FileManager(this.fileHelper);
 
   bool hasAnyFile() => _filesInMemory.isNotEmpty;
@@ -104,50 +106,22 @@ class FileManager {
       // 폴더 내의 파일을 모두 로드
       final files = await loadFilesFromFolder(folderName);
 
-      // 현재 날짜를 YYYYMMDD 형식으로 포맷
-      String currentDate = DateFormat('yyyyMMdd').format(DateTime.now());
-
       // 서버로 전송할 파일 정보 구성
       Map<String, Map<String, String>> fileInfo = {};
       List<String> filePaths = [];
-      int fileCounter = 1;
 
       for (var file in files) {
-        // 파일명 생성: 오늘날짜 + 지점코드 + 4자리 카운터
-        String fileName =
-            '$currentDate${'000'}${fileCounter.toString().padLeft(4, '0')}.jpg';
-
-        // OCR 결과를 docNo로 사용
         String docNo = file.getOcrText()?.replaceAll('-', '') ?? 'OCR 결과 없음';
 
         // 파일 정보 구성
-        fileInfo[fileName] = {'docNo': docNo};
-
-        // 파일 경로를 지정하고 파일을 저장
-        // 수정된 코드
-        var newFilePath =
-            path.join(path.dirname(file.getFile().path), fileName);
-        var newFile = await file.getFile().copy(newFilePath);
-        // file.getFile().deleteSync(); // 복사 후 원본 파일 삭제
-
-        // OCR 파일의 경로도 새 파일명으로 변경
-        var ocrFilePath = '${file.getFile().path}.ocr.txt';
-        var newOcrFilePath = '$newFilePath.ocr.txt';
-        if (File(ocrFilePath).existsSync()) {
-          await File(ocrFilePath).rename(newOcrFilePath);
-        }
-
-        // fileRead 객체의 이름도 새 파일명으로 업데이트
-        file.setFile(newFile);
-        file.setName(fileName);
+        fileInfo[file.getName()] = {'docNo': docNo};
 
         // filePaths 리스트에 파일 경로 추가
-        filePaths.add(newFilePath);
-
-        fileCounter++;
+        filePaths.add(file.getFile().path);
       }
 
       // boxInfo JSON 생성
+      final currentDate = DateFormat('yyyyMMdd').format(DateTime.now());
       final boxInfo = {
         'affCd': 'SHB', // 실제 고객사 코드를 입력
         'brCd': '000', // 실제 지점 코드를 입력
@@ -157,16 +131,30 @@ class FileManager {
       };
 
       // 서버로 파일 전송
-      await fileUploader.uploadFiles(
+      final response = await fileUploader.uploadFiles(
         scannedBarcode, // 스캔한 바코드 번호를 shipBoxNo로 사용
         boxInfo,
         fileInfo,
         filePaths,
       );
 
-      print('모든 파일이 서버로 전송되었습니다.');
+      if (response.statusCode == 200) {
+        var responseData = await response.stream.bytesToString();
+        var jsonResponse = jsonDecode(responseData);
+
+        // resultCd를 프린트
+        print(
+            'resultCd: ${jsonResponse['resultCd']}, resultMsg: ${jsonResponse['resultMsg']}');
+
+        print('모든 파일이 서버로 전송되었습니다.');
+        folderUploadStatus[folderName] = true; // 성공적으로 전송된 경우에만 상태를 true로 설정
+      } else {
+        print('파일 업로드 실패: ${response.statusCode}');
+        folderUploadStatus[folderName] = false; // 실패 시 상태를 false로 설정
+      }
     } catch (e) {
       print('파일 업로드 중 오류 발생: $e');
+      folderUploadStatus[folderName] = false; // 예외 발생 시 상태를 false로 설정
     }
   }
 
@@ -217,13 +205,18 @@ class FileManager {
         folderFileCounts[qrCode] ??= 1;
       }
 
+      // 현재 날짜를 YYYYMMDD 형식으로 포맷
+      String currentDate = DateFormat('yyyyMMdd').format(DateTime.now());
+
       for (int i = 0; i < paths.length; i++) {
         String imgPath = paths[i];
 
         final image = img.decodeImage(File(imgPath).readAsBytesSync());
 
         if (image != null) {
-          final fileName = "$qrCode${folderFileCounts[qrCode]}.jpg";
+          // 새로운 파일 이름 지정
+          final fileName =
+              '$currentDate${'000'}${folderFileCounts[qrCode]!.toString().padLeft(4, '0')}.jpg';
           final outputFilePath = path.join(folderPath, fileName);
 
           // 파일을 폴더 안에만 저장

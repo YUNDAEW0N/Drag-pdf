@@ -9,6 +9,7 @@ import 'package:drag_pdf/common/localization/localization.dart';
 import 'package:drag_pdf/components/components.dart';
 import 'package:drag_pdf/model/enums/loader_of.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../helper/dialogs/custom_dialog.dart';
 import '../../helper/helpers.dart';
@@ -26,6 +27,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
   final HomeViewModel viewModel = HomeViewModel();
   final FileManager _mfl = AppSession.singleton.mfl;
   String? selectedFolderName;
+  String? branchName;
 
   // QR or Barcode 스캔 관련 변수 추가
   //----------------------------------------------------------------------
@@ -38,6 +40,15 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _loadBranchName();
+  }
+
+  // SharedPreferences에서 지점명을 불러오는 메서드
+  Future<void> _loadBranchName() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      branchName = prefs.getString('branchName') ?? 'Drag PDF'; // 기본값 설정
+    });
   }
 
   @override
@@ -344,7 +355,8 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
       child: Scaffold(
         appBar: AppBar(
           automaticallyImplyLeading: false,
-          title: Text(Localization.of(context).string('drag_pdf')),
+          centerTitle: true,
+          title: Text('$branchName 문서 관리'),
           actions: [
             IconButton(
               onPressed: () async => await scanImages(),
@@ -362,30 +374,36 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
                       itemCount: folderNames.length,
                       itemBuilder: (context, index) {
                         final folderName = folderNames[index];
+                        final isUploaded =
+                            _mfl.folderUploadStatus[folderName] ??
+                                false; // 업로드 상태 확인
+
                         return Card(
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10.0),
                           ),
                           elevation: 4.0,
+                          color: isUploaded
+                              ? Colors.green[100]
+                              : Colors.white, // 업로드된 폴더는 녹색 배경
                           child: ListTile(
-                            leading: const Icon(
-                              Icons.folder,
-                              color: ColorsApp.kMainColor,
+                            leading: Icon(
+                              isUploaded
+                                  ? Icons.check_circle
+                                  : Icons.folder, // 업로드된 폴더는 체크 아이콘
+                              color: isUploaded
+                                  ? Colors.green
+                                  : ColorsApp.kMainColor,
                               size: 40,
                             ),
                             title: Text(
                               folderName,
-                              style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: ColorsApp.kMainColor,
-                              ),
-                            ),
-                            subtitle: Text(
-                              '박스 번호: $folderName',
                               style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[600],
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                                color: isUploaded
+                                    ? Colors.green
+                                    : ColorsApp.kMainColor, // 업로드된 폴더는 녹색 텍스트
                               ),
                             ),
                             trailing: const Icon(
@@ -402,62 +420,6 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
                           ),
                         );
                       },
-                    ),
-                  ),
-                  // 추가된 서버 전송 버튼
-                  Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        if (scannedTitle.isEmpty) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('먼저 바코드나 QR 코드를 스캔하세요.')),
-                          );
-                          return;
-                        }
-
-                        if (selectedFolderName == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('서버로 전송할 폴더를 선택하세요.')),
-                          );
-                          return;
-                        }
-
-                        setState(() {
-                          Loading.show(context);
-                        });
-
-                        try {
-                          await _mfl.uploadFolderImagesToServer(
-                            selectedFolderName!, // 선택된 폴더의 이미지를 서버로 전송
-                            scannedTitle, // 스캔된 바코드나 QR 코드 번호를 shipBoxNo로 사용
-                          );
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text('이미지들이 성공적으로 서버로 전송되었습니다.')),
-                          );
-                        } catch (error) {
-                          CustomDialog.showError(
-                            context: context,
-                            error: error,
-                            titleLocalized: '파일 전송 오류',
-                            subtitleLocalized: error.toString(),
-                            buttonTextLocalized: '확인',
-                          );
-                        } finally {
-                          setState(() {
-                            Loading.hide();
-                          });
-                        }
-                      },
-                      icon: const Icon(Icons.upload),
-                      label: const Text('서버로 전송'),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 32, vertical: 16),
-                        textStyle: const TextStyle(fontSize: 18),
-                      ),
                     ),
                   ),
                 ],

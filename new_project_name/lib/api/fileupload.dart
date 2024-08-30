@@ -8,8 +8,11 @@ import 'package:mime/mime.dart';
 class FileUploader {
   final String baseUrl = 'http://118.217.19.215:8088/dniplus-link/shipboxes';
 
-  Future<void> uploadFiles(String shipBoxNo, Map<String, String> boxInfo,
-      Map<String, Map<String, String>> fileInfo, List<String> filePaths) async {
+  Future<http.StreamedResponse> uploadFiles(
+      String shipBoxNo,
+      Map<String, String> boxInfo,
+      Map<String, Map<String, String>> fileInfo,
+      List<String> filePaths) async {
     try {
       var uri = Uri.parse('$baseUrl/$shipBoxNo');
       var request = http.MultipartRequest('POST', uri);
@@ -31,14 +34,13 @@ class FileUploader {
       ));
 
       print('여기까지도 못오니?');
-
       print('파일 경로 리스트: $filePaths');
 
       // 파일 추가
       for (var filePath in filePaths) {
         var file = File(filePath);
         var mimeType = lookupMimeType(file.path);
-        print('MIMTYPE : ${mimeType}');
+        print('MIMETYPE : ${mimeType}');
         request.files.add(await http.MultipartFile.fromPath(
           'files',
           file.path,
@@ -47,19 +49,12 @@ class FileUploader {
         ));
       }
 
+      // 요청 전송 및 응답 반환
       var response = await request.send();
-
-      if (response.statusCode == 200) {
-        print('파일 업로드 성공');
-        var responseData = await http.Response.fromStream(response);
-        print('응답 데이터: ${utf8.decode(responseData.bodyBytes)}');
-      } else {
-        print('파일 업로드 실패: ${response.statusCode}');
-        var responseData = await http.Response.fromStream(response);
-        print('에러 응답 데이터: ${utf8.decode(responseData.bodyBytes)}');
-      }
+      return response; // 응답 반환
     } catch (e) {
       print('파일 업로드 중 오류 발생: $e');
+      rethrow; // 오류 발생 시 재던지기
     }
   }
 }

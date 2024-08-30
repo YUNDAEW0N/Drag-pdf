@@ -128,7 +128,7 @@ class FileManager {
         var newFilePath =
             path.join(path.dirname(file.getFile().path), fileName);
         var newFile = await file.getFile().copy(newFilePath);
-        file.getFile().deleteSync(); // 복사 후 원본 파일 삭제
+        // file.getFile().deleteSync(); // 복사 후 원본 파일 삭제
 
         // OCR 파일의 경로도 새 파일명으로 변경
         var ocrFilePath = '${file.getFile().path}.ocr.txt';
@@ -140,6 +140,9 @@ class FileManager {
         // fileRead 객체의 이름도 새 파일명으로 업데이트
         file.setFile(newFile);
         file.setName(fileName);
+
+        // filePaths 리스트에 파일 경로 추가
+        filePaths.add(newFilePath);
 
         fileCounter++;
       }

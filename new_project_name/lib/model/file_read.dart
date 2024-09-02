@@ -55,6 +55,11 @@ class FileRead {
     }
   }
 
+  Future<void> saveOcrTextToFile(String ocrText) async {
+    final ocrFilePath = '${_file.path}.ocr.txt';
+    await File(ocrFilePath).writeAsString(ocrText);
+  }
+
   @override
   String toString() {
     return "File: $_file, size: ${getSize()}, name: $_name, extension: ${getExtensionType().name}, image-width: ${getImage()?.width}, image-height: ${getImage()?.height}, ocrText: $_ocrText";

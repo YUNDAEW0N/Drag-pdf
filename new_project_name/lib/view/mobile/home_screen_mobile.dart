@@ -41,6 +41,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadBranchName();
+    loadUploadStatus();
   }
 
   // SharedPreferences에서 지점명을 불러오는 메서드
@@ -84,6 +85,33 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
             .string('the_app_is_going_to_close')); // The app is going to close
         break;
     }
+  }
+
+  Future<void> loadUploadStatus() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    List<String> uploadedFolders = prefs.getStringList('uploadedFolders') ?? [];
+
+    // 로컬에 존재하는 실제 폴더 목록을 가져옴
+    List<String> existingFolders =
+        await _mfl.loadFolderNames(); // 로컬 폴더 목록을 가져오는 메서드
+
+    // 존재하지 않는 폴더를 업로드 상태 목록에서 제거
+    List<String> validUploadedFolders = [];
+    for (String folder in uploadedFolders) {
+      if (existingFolders.contains(folder)) {
+        validUploadedFolders.add(folder);
+        _mfl.folderUploadStatus[folder] = true;
+      } else {
+        // 존재하지 않는 폴더는 업로드 상태에서 제거
+        _mfl.folderUploadStatus[folder] = false;
+      }
+    }
+
+    // SharedPreferences에 유효한 업로드된 폴더 목록을 다시 저장
+    await prefs.setStringList('uploadedFolders', validUploadedFolders);
+
+    // UI 업데이트
+    setState(() {});
   }
 
   Future<void> loadFilesOrImages(LoaderOf from) async {
@@ -304,7 +332,8 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
     Loading.show(context); // 로딩 화면 표시
 
     try {
-      final fileRead = await viewModel.scanDocument(title); // scanDocument 실행
+      final fileRead =
+          await viewModel.scanDocument(title, "SHB"); // scanDocument 실행
       if (fileRead != null) {
         // 폴더 목록 화면을 새로고침하거나 이동
         setState(() {
@@ -327,7 +356,7 @@ class _HomeScreenMobileState extends State<HomeScreenMobile>
       // 이후 스캔 결과를 사용하여 문서 스캔
       if (scannedTitle.isNotEmpty) {
         final fileread =
-            await viewModel.scanDocument(scannedTitle); // QR 코드 정보 전달
+            await viewModel.scanDocument(scannedTitle, "SHB"); // QR 코드 정보 전달
         if (fileread != null) {
           setState(() {
             Utils.printInDebug("Document Scanned: ${fileread.getName()}");

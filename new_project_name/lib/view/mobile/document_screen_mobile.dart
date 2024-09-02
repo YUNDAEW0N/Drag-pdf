@@ -1,11 +1,16 @@
 import 'package:drag_pdf/model/file_read.dart';
 import 'package:flutter/material.dart';
+import 'package:drag_pdf/api/documentvalidation.dart'; // ApiService를 가져옵니다.
 
 class DocumentViewerScreen extends StatefulWidget {
   final FileRead fileRead;
+  final bool isValidated; // 추가: Validation 상태를 전달받음
 
-  const DocumentViewerScreen({Key? key, required this.fileRead})
-      : super(key: key);
+  const DocumentViewerScreen({
+    Key? key,
+    required this.fileRead,
+    required this.isValidated, // 추가: Validation 상태를 전달받음
+  }) : super(key: key);
 
   @override
   _DocumentViewerScreenState createState() => _DocumentViewerScreenState();
@@ -13,13 +18,16 @@ class DocumentViewerScreen extends StatefulWidget {
 
 class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
   final TextEditingController _controller = TextEditingController();
+  final ApiService _apiService = ApiService(); // ApiService 인스턴스 생성
   bool _isEditing = false;
+  bool _isValidated = false; // Validation 상태를 저장할 변수
 
   @override
   void initState() {
     super.initState();
     final ocrText = widget.fileRead.getOcrText();
     _controller.text = ocrText ?? '';
+    _isValidated = widget.isValidated; // 초기 Validation 상태 설정
   }
 
   void _toggleEditing() {
@@ -34,8 +42,32 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
         widget.fileRead.setOcrText(_controller.text);
         _toggleEditing();
       });
-      // 여기서 Navigator.pop을 호출할 때 수정된 fileRead 객체를 함께 반환합니다.
-      Navigator.pop(context, widget.fileRead);
+
+      // 수정된 텍스트를 파일에 저장
+      await widget.fileRead.saveOcrTextToFile(_controller.text);
+
+      // 수정된 텍스트로 validation 요청
+      String cleanedDocNo = _controller.text.replaceAll('-', '');
+      final validationResponse = await _apiService.checkDocumentNumber(
+        cleanedDocNo,
+        'SHB', // 고객사 코드를 여기에 전달
+      );
+
+      if (validationResponse['resultCd'] == '01') {
+        setState(() {
+          _isValidated = true; // Validation 성공 시 상태 업데이트
+        });
+        print('Validation 성공: ${validationResponse['resultMsg']}');
+      } else {
+        setState(() {
+          _isValidated = false; // Validation 실패 시 상태 업데이트
+        });
+        print('Validation 실패: ${validationResponse['resultMsg']}');
+      }
+
+      // 여기서 Navigator.pop을 호출할 때 수정된 fileRead 객체와 validation 상태를 함께 반환합니다.
+      Navigator.pop(
+          context, {'fileRead': widget.fileRead, 'isValidated': _isValidated});
     }
   }
 
@@ -66,6 +98,11 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
                 child: Image.file(
                   widget.fileRead.getFile(),
                   fit: BoxFit.contain,
+                  color: _isValidated
+                      ? null // Validation 성공 시 기본 이미지 표시
+                      : Colors.red.withOpacity(0.5), // Validation 실패 시 빨간색 오버레이
+                  colorBlendMode:
+                      _isValidated ? null : BlendMode.color, // BlendMode 적용
                 ),
               ),
             ),

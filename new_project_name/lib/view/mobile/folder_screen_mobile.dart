@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:drag_pdf/model/file_read.dart';
 import 'package:drag_pdf/view/mobile/document_screen_mobile.dart';
 import 'package:drag_pdf/helper/app_session.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class FolderFilesScreen extends StatelessWidget {
   final List<FileRead> files;
@@ -14,12 +15,17 @@ class FolderFilesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // AppSession에서 FileManager 인스턴스를 가져옴
     final fileManager = AppSession.singleton.mfl;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(folderName),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () {
+            Navigator.pop(context, true); // 이전 화면으로 true 값 전달
+          },
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.upload),
@@ -33,6 +39,8 @@ class FolderFilesScreen extends StatelessWidget {
         itemCount: files.length,
         itemBuilder: (context, index) {
           final file = files[index];
+          final isValidated = fileManager.isImageValidated(file.getName());
+
           return Card(
             margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
             elevation: 4.0,
@@ -49,9 +57,12 @@ class FolderFilesScreen extends StatelessWidget {
               ),
               title: Text(
                 file.getName(),
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
+                  color: isValidated
+                      ? Colors.black
+                      : Colors.red, // Validation 상태에 따라 색상 변경
                 ),
               ),
               subtitle:
@@ -62,20 +73,34 @@ class FolderFilesScreen extends StatelessWidget {
                         )
                       : null,
               trailing: Icon(
-                Icons.arrow_forward_ios,
-                color: Colors.grey[400],
-                size: 20.0,
+                isValidated
+                    ? Icons.check_circle
+                    : Icons.error, // Validation 상태에 따른 아이콘
+                color: isValidated ? Colors.green : Colors.red,
+                size: 24.0,
               ),
               onTap: () async {
-                final updatedFile = await Navigator.push(
+                final result = await Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => DocumentViewerScreen(fileRead: file),
+                    builder: (context) => DocumentViewerScreen(
+                      fileRead: file,
+                      isValidated: isValidated,
+                    ),
                   ),
                 );
 
-                if (updatedFile != null) {
+                // 수정된 파일 데이터와 Validation 상태를 반영
+                if (result != null && result is Map) {
+                  final updatedFile = result['fileRead'] as FileRead;
+                  final updatedValidationStatus = result['isValidated'] as bool;
+
                   files[index] = updatedFile;
+
+                  // Validation 상태를 업데이트합니다.
+                  fileManager.imageValidationStatus[updatedFile.getName()] =
+                      updatedValidationStatus;
+
                   (context as Element).markNeedsBuild();
                 }
               },
@@ -86,13 +111,38 @@ class FolderFilesScreen extends StatelessWidget {
     );
   }
 
+  Future<void> saveUploadStatus(String folderName) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    List<String> uploadedFolders = prefs.getStringList('uploadedFolders') ?? [];
+    if (!uploadedFolders.contains(folderName)) {
+      uploadedFolders.add(folderName);
+    }
+    await prefs.setStringList('uploadedFolders', uploadedFolders);
+  }
+
   Future<void> _uploadFiles(
       BuildContext context, FileManager fileManager) async {
+    // 모든 파일의 validation 상태를 확인
+    final hasInvalidFiles =
+        files.any((file) => !fileManager.isImageValidated(file.getName()));
+
+    if (hasInvalidFiles) {
+      // Validation을 통과하지 못한 파일이 있는 경우
+      CustomDialog.showError(
+        context: context,
+        error: 'Validation Error', // 이 부분에 오류 메시지를 추가
+        titleLocalized: '서버 전송 실패',
+        subtitleLocalized: 'Validation을 통과하지 못한 파일이 있습니다. 파일을 확인해주세요.',
+        buttonTextLocalized: '확인',
+      );
+      return; // 서버로 전송하지 않고 종료
+    }
+
+    // Validation을 모두 통과한 경우에만 업로드 진행
     Loading.show(context);
     try {
-      // 서버로 전송
-      await fileManager.uploadFolderImagesToServer(
-          folderName, folderName); // 여기에 적절한 바코드나 QR 코드 번호를 입력
+      await fileManager.uploadFolderImagesToServer(folderName, folderName);
+      await saveUploadStatus(folderName); // 업로드 상태 저장
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('이미지들이 성공적으로 서버로 전송되었습니다.')),
       );

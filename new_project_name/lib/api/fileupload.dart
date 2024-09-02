@@ -33,7 +33,6 @@ class FileUploader {
         contentType: MediaType('application', 'json'),
       ));
 
-      print('여기까지도 못오니?');
       print('파일 경로 리스트: $filePaths');
 
       // 파일 추가

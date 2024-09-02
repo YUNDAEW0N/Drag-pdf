@@ -78,8 +78,8 @@ class HomeViewModel {
     await _mfl.renameFile(file, newName);
   }
 
-  Future<FileRead?> scanDocument(String qrCode) async {
-    return await _mfl.scanDocument(qrCode);
+  Future<FileRead?> scanDocument(String qrCode, String affCd) async {
+    return await _mfl.scanDocument(qrCode, affCd);
   }
 
   Future<FileRead> generatePreviewPdfDocument() async {
@@ -98,7 +98,8 @@ class HomeViewModel {
   Future<void> openFolder(String folderName, BuildContext context) async {
     final files = await _mfl.loadFilesFromFolder(folderName); // 비동기 파일 로드
     if (files.isNotEmpty) {
-      Navigator.push(
+      // 폴더 화면이 닫힐 때까지 기다리고, result 값을 받습니다.
+      final result = await Navigator.push(
         context,
         MaterialPageRoute(
           builder: (context) => FolderFilesScreen(
@@ -107,6 +108,14 @@ class HomeViewModel {
           ),
         ),
       );
+
+      // 폴더 화면이 닫힌 후, result가 true이면 UI를 갱신합니다.
+      if (result == true) {
+        // HomeScreenMobile에서 setState를 호출하여 UI를 갱신할 수 있도록 함
+        if (context.mounted) {
+          (context as Element).markNeedsBuild();
+        }
+      }
     } else {
       // 파일이 없는 경우에 대한 처리
       ScaffoldMessenger.of(context).showSnackBar(

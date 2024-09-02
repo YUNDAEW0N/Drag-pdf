@@ -1,5 +1,5 @@
 import 'dart:io';
-
+import 'dart:convert';
 import 'package:drag_pdf/api/fileupload.dart';
 import 'package:flutter/services.dart';
 import 'package:cunning_document_scanner/cunning_document_scanner.dart';
@@ -11,19 +11,24 @@ import 'package:drag_pdf/helper/pdf_helper.dart';
 import 'package:drag_pdf/model/file_read.dart';
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+
 import 'package:googleapis_auth/auth_io.dart';
 import 'package:googleapis/vision/v1.dart';
 import '../model/enums/supported_file_type.dart';
 import 'package:intl/intl.dart';
+import 'package:drag_pdf/api/documentvalidation.dart';
 
 class FileManager {
   final FileUploader fileUploader = FileUploader(); // FileUploader 인스턴스 생성
+  final ApiService apiService = ApiService();
   final List<FileRead> _filesInMemory = [];
   final FileHelper fileHelper;
   final _scopes = [VisionApi.cloudPlatformScope];
 
   final Map<String, bool> folderUploadStatus = {};
+
+  final Map<String, bool> imageValidationStatus =
+      {}; // 이미지 파일별 Validation 상태를 저장
 
   FileManager(this.fileHelper);
 
@@ -191,7 +196,7 @@ class FileManager {
   // 바코드별 파일 카운트를 저장하는 맵
   final Map<String, int> folderFileCounts = {};
 
-  Future<FileRead?> scanDocument(String qrCode) async {
+  Future<FileRead?> scanDocument(String qrCode, String affCd) async {
     FileRead? fileRead;
     List<String>? paths = await CunningDocumentScanner.getPictures();
     if (paths != null && paths.isNotEmpty) {
@@ -200,50 +205,70 @@ class FileManager {
 
       if (!folder.existsSync()) {
         folder.createSync(recursive: true);
-        folderFileCounts[qrCode] = 1;
-      } else {
-        folderFileCounts[qrCode] ??= 1;
       }
 
-      // 현재 날짜를 YYYYMMDD 형식으로 포맷
+      // 현재 폴더 내에 있는 파일 수를 계산
+      int existingFilesCount = folder
+          .listSync()
+          .where((entity) => entity.path.endsWith('.jpg'))
+          .length;
+
       String currentDate = DateFormat('yyyyMMdd').format(DateTime.now());
 
       for (int i = 0; i < paths.length; i++) {
         String imgPath = paths[i];
-
         final image = img.decodeImage(File(imgPath).readAsBytesSync());
 
         if (image != null) {
-          // 새로운 파일 이름 지정
+          // 고유한 파일 이름 생성
           final fileName =
-              '$currentDate${'000'}${folderFileCounts[qrCode]!.toString().padLeft(4, '0')}.jpg';
+              '$currentDate${'000'}${(existingFilesCount + i + 1).toString().padLeft(4, '0')}.jpg';
           final outputFilePath = path.join(folderPath, fileName);
 
-          // 파일을 폴더 안에만 저장
           File(outputFilePath).writeAsBytesSync(img.encodeJpg(image));
 
           final file = File(outputFilePath);
           final size = await file.length();
           final newFileRead = FileRead(file, fileName, image, size, "jpg");
 
-          // OCR 텍스트 저장
+          // OCR 수행 및 결과 저장
           String ocrText = await performGoogleCloudOcrBatch([imgPath])
               .then((res) => res.isNotEmpty ? res[0] : 'OCR 결과 없음');
           newFileRead.setOcrText(ocrText);
           File('${outputFilePath}.ocr.txt').writeAsStringSync(ocrText);
-
-          print('SCANDOCUMENT: $ocrText');
-          _addSingleFile(newFileRead, folderPath);
-
-          folderFileCounts[qrCode] = folderFileCounts[qrCode]! + 1;
+          _filesInMemory.add(newFileRead);
 
           if (fileRead == null) {
-            fileRead = newFileRead; // 첫 번째 파일을 반환하기 위해 설정
+            fileRead = newFileRead;
+          }
+
+          // OCR 결과에서 하이픈 제거
+          String cleanedDocNo = ocrText.replaceAll('-', '');
+
+          // 서버에 Validation 요청
+          final validationResponse =
+              await apiService.checkDocumentNumber(cleanedDocNo, affCd);
+
+          print("원장번호 : $cleanedDocNo");
+
+          if (validationResponse['resultCd'] == '01') {
+            // Validation 성공
+            imageValidationStatus[fileName] = true;
+            print('Validation 성공: ${validationResponse['resultMsg']}');
+          } else {
+            // Validation 실패
+            imageValidationStatus[fileName] = false;
+            print('Validation 실패: ${validationResponse['resultMsg']}');
           }
         }
       }
     }
     return fileRead;
+  }
+
+  // 이미지별 Validation 상태를 반환하는 메서드
+  bool isImageValidated(String fileName) {
+    return imageValidationStatus[fileName] ?? true;
   }
 
   Future<List<FileRead>> loadFilesFromFolder(String folderName) async {
